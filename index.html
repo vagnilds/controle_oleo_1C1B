@@ -1822,6 +1822,14 @@
 
     const UNIVERSAL_CLOUD_URL = 'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json';
 
+    let localLastModifiedTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
+    let isSavingInProgress = false;
+
+    function markLocalChange() {
+        localLastModifiedTime = Date.now();
+        localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
+    }
+
     // Gerar link de conexão rápida para enviar ao celular
     function generateMobileSyncLink() {
         const gh = getGithubConfig();
@@ -1862,11 +1870,10 @@
                 if (owner) localStorage.setItem('oleo_vtr_gh_owner', owner);
                 if (repo) localStorage.setItem('oleo_vtr_gh_repo', repo);
                 
-                // Limpar o hash da barra de endereços para segurança
                 history.replaceState(null, null, window.location.pathname);
                 
                 showToast('🎉 <strong>Celular Conectado com Sucesso!</strong> Sincronizando com o PC...');
-                setTimeout(() => loadDataFromOnline(false), 500);
+                setTimeout(() => loadDataFromOnline(false), 300);
             } catch (e) {
                 console.warn('Erro ao processar sync via hash:', e);
             }
@@ -1904,29 +1911,58 @@
         }
     }
 
-    // Leitura direta do repositório GitHub
+    // Leitura DIRETA e SEM CACHE do repositório GitHub usando a GitHub REST API Contents
     async function loadDataFromGithub() {
         const gh = getGithubConfig();
-        const urlsToTry = [
-            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?t=${Date.now()}`,
-            `./${gh.path}?t=${Date.now()}`
+        const headers = {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        };
+        if (gh.token && gh.token.trim()) {
+            headers['Authorization'] = `Bearer ${gh.token.trim()}`;
+        }
+
+        // 1. Tentar ler diretamente da API do GitHub (Sempre em tempo real, sem cache de CDN)
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const apiUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}&_nocache=${Date.now()}`;
+            const res = await fetch(apiUrl, { headers: headers, signal: controller.signal, cache: 'no-store' });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+                const apiData = await res.json();
+                if (apiData && apiData.content) {
+                    const cleanBase64 = apiData.content.replace(/\s/g, '');
+                    const jsonText = decodeURIComponent(escape(window.atob(cleanBase64)));
+                    const parsed = JSON.parse(jsonText);
+                    if (parsed && typeof parsed === 'object' && (Array.isArray(parsed.records) || parsed.vehicles || parsed.appTitle)) {
+                        return { success: true, data: parsed, sha: apiData.sha, source: `GitHub API (${gh.owner}/${gh.repo})` };
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('Erro ao consultar GitHub API contents, tentando raw...', err);
+        }
+
+        // 2. Fallback de leitura raw com timestamp anti-cache
+        const fallbackUrls = [
+            `./${gh.path}?_t=${Date.now()}`,
+            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?_t=${Date.now()}`
         ];
 
-        for (const url of urlsToTry) {
+        for (const url of fallbackUrls) {
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 4000);
-                const res = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+                const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
                 clearTimeout(timeoutId);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && typeof data === 'object' && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
-                        return { success: true, data: data, source: `GitHub (${gh.owner}/${gh.repo})` };
+                        return { success: true, data: data, source: `GitHub Raw (${gh.owner}/${gh.repo})` };
                     }
                 }
-            } catch (e) {
-                // Tenta próxima URL
-            }
+            } catch (e) {}
         }
         return { success: false };
     }
@@ -1944,12 +1980,13 @@
         try {
             let currentSha = null;
             try {
-                const getRes = await fetch(`${apiPath}?ref=${gh.branch}&t=${Date.now()}`, {
+                const getRes = await fetch(`${apiPath}?ref=${gh.branch}&_t=${Date.now()}`, {
                     headers: {
                         'Accept': 'application/vnd.github+json',
                         'Authorization': `Bearer ${token}`,
                         'X-GitHub-Api-Version': '2022-11-28'
-                    }
+                    },
+                    cache: 'no-store'
                 });
                 if (getRes.ok) {
                     const getData = await getRes.json();
@@ -1963,7 +2000,7 @@
             const base64Content = utf8ToBase64(jsonString);
 
             const putBody = {
-                message: `Atualização automática da frota [${new Date().toLocaleString('pt-BR')}]`,
+                message: `Atualização da frota de viaturas [${new Date().toLocaleString('pt-BR')}]`,
                 content: base64Content,
                 branch: gh.branch
             };
@@ -2030,7 +2067,7 @@
         for (const endpoint of endpoints) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
 
                 const isFirebase = endpoint.includes('firebaseio.com');
                 const actualMethod = isFirebase ? (method === 'POST' ? 'PUT' : method) : method;
@@ -2041,7 +2078,8 @@
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    signal: controller.signal
+                    signal: controller.signal,
+                    cache: 'no-store'
                 };
 
                 if (payload && (method === 'POST' || method === 'PUT')) {
@@ -2105,21 +2143,31 @@
     }
 
     async function loadDataFromOnline(isBackground = false) {
+        // Se estivermos salvando dados locais neste momento, aguardar para não sobrescrever
+        if (isSavingInProgress) return;
+
         if (!isBackground) setCloudStatusBadge('syncing', '', 'Sincronizando dados em tempo real...');
         try {
-            // Comparar fontes online (GitHub vs Nuvem) e pegar a versão mais recente por updatedAt
             let candidates = [];
 
-            // 1. Tentar ler do GitHub
+            // 1. Tentar ler do GitHub API (Tempo real, sem cache de CDN)
             const ghRes = await loadDataFromGithub();
             if (ghRes.success && ghRes.data) {
-                candidates.push({ source: 'github', data: ghRes.data, time: new Date(ghRes.data.updatedAt || 0).getTime() });
+                candidates.push({ 
+                    source: 'github', 
+                    data: ghRes.data, 
+                    time: new Date(ghRes.data.updatedAt || 0).getTime() 
+                });
             }
 
             // 2. Tentar ler da Nuvem RTDB / Netlify
             const apiRes = await executeApiRequest('GET');
             if (apiRes.success && apiRes.data) {
-                candidates.push({ source: 'api', data: apiRes.data, time: new Date(apiRes.data.updatedAt || 0).getTime() });
+                candidates.push({ 
+                    source: 'api', 
+                    data: apiRes.data, 
+                    time: new Date(apiRes.data.updatedAt || 0).getTime() 
+                });
             }
 
             if (candidates.length === 0) {
@@ -2131,13 +2179,28 @@
                 return;
             }
 
-            // Ordenar pela versão mais recente
+            // Selecionar a fonte online com o timestamp mais recente
             candidates.sort((a, b) => b.time - a.time);
             const winner = candidates[0];
             const data = winner.data;
+            const remoteTime = winner.time;
             const connectionType = winner.source === 'github' 
                 ? `Conectado ao Repositório GitHub (${getGithubConfig().owner}/${getGithubConfig().repo})` 
                 : 'Conectado à Nuvem Universal RTDB';
+
+            // 🛡️ PROTEÇÃO ANTI-SOBREPOSIÇÃO:
+            // Se o usuário realizou uma alteração LOCAL recente que é mais nova do que o dado recebido do servidor,
+            // NUNCA sobrescrever o dado local com o dado antigo do servidor!
+            const currentLocalTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
+            if (currentLocalTime > remoteTime && (Date.now() - currentLocalTime) < 45000) {
+                console.log('Alteração local mais recente detectada. Preservando e reenviando para a nuvem/GitHub...');
+                currentConnectionDetail = connectionType;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+                isCloudConnected = true;
+                // Reenviar para garantir que o servidor receba a versão mais nova
+                syncAllDataToOnline(true);
+                return;
+            }
 
             if (data && typeof data === 'object' && Object.keys(data).length > 0 && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
                 const currentHash = generateDataHash(data);
@@ -2178,6 +2241,12 @@
                     localStorage.setItem('oleo_vtr_last_status_update', data.lastStatusUpdate);
                 }
 
+                // Atualizar o timestamp local para coincidir com o do servidor
+                if (remoteTime > 0) {
+                    localLastModifiedTime = remoteTime;
+                    localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
+                }
+
                 populateMonthSelect();
                 populateVehicleSelects();
                 renderDashboard();
@@ -2207,6 +2276,9 @@
 
     async function syncAllDataToOnline(force = false) {
         if (isRemoteUpdate && !force) return;
+        
+        isSavingInProgress = true;
+        markLocalChange();
 
         const payload = {
             records: records || [],
@@ -2215,7 +2287,7 @@
             targetMap: vehicleTargetMap || {},
             appTitle: appTitle || '🚓 CONTROLE DE ÓLEO & RODAGEM DE VIATURAS',
             lastStatusUpdate: localStorage.getItem('oleo_vtr_last_status_update') || '',
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date(localLastModifiedTime).toISOString()
         };
 
         lastSyncedHash = generateDataHash(payload);
@@ -2248,6 +2320,8 @@
             console.warn('Erro ao salvar na Nuvem RTDB:', err);
         }
 
+        isSavingInProgress = false;
+
         if (!cloudSaved && !savedOnGh) {
             currentConnectionDetail = 'Salvo apenas Localmente';
             setCloudStatusBadge('disconnected', '', currentConnectionDetail);
@@ -2258,7 +2332,7 @@
         if (autoSyncInterval) clearInterval(autoSyncInterval);
         autoSyncInterval = setInterval(() => {
             loadDataFromOnline(true);
-        }, 4000);
+        }, 5000);
 
         window.addEventListener('focus', () => {
             loadDataFromOnline(true);
@@ -2411,7 +2485,7 @@
             • <strong>Permissão de Gravação GitHub:</strong> ${ghWriteResult}<br>
             • <strong>Nuvem Backup:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
             • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
-            • <strong>Sincronização Ativa:</strong> 🟢 Atualização a cada 4 segundos
+            • <strong>Sincronização Ativa:</strong> 🟢 Atualização a cada 5 segundos
         `;
 
         isCloudConnected = true;
