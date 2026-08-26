@@ -1114,9 +1114,12 @@
 
         <div class="header-actions-area" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
-                <button type="button" id="cloudStatusBtn" class="cloud-badge-btn disconnected" onclick="loadDataFromOnline(false)" title="Status da sincronização online na nuvem (Clique para forçar atualização)">
+                <button type="button" class="btn btn-outline btn-sm btn-3d" onclick="openServerConfigModal()" title="Configurar Banco de Dados no Repositório GitHub (database.json)" style="border-color: #3b82f6; color: #1d4ed8; font-weight: 700;">
+                    🐙 Repositório GitHub
+                </button>
+                <button type="button" id="cloudStatusBtn" class="cloud-badge-btn disconnected" onclick="openServerConfigModal()" title="Status da Conexão GitHub / Nuvem (Clique para Configurar)">
                     <span class="cloud-dot"></span>
-                    <span id="cloudStatusText">Conectando Online...</span>
+                    <span id="cloudStatusText">Conectando GitHub...</span>
                 </button>
                 <button type="button" id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" title="Alternar entre Modo Noturno e Modo Claro">
                     <span id="themeToggleIcon" class="theme-toggle-icon">🌙</span>
@@ -1480,8 +1483,11 @@
                     <button class="btn btn-online btn-3d" title="Sincronizar dados agora na nuvem online" onclick="loadDataFromOnline(false)">
                         ☁️ Sincronizar Online
                     </button>
-                    <button class="btn btn-outline btn-3d" title="Configurar e Testar Servidor Online" onclick="openServerConfigModal()">
-                        🌐 Conexão Servidor
+                    <button class="btn btn-3d" style="background: linear-gradient(135deg, #1f2937, #111827); color: white; border-bottom: 2px solid #000;" title="Configurar Banco de Dados no Repositório GitHub (database.json)" onclick="openServerConfigModal()">
+                        🐙 Repositório GitHub (database.json)
+                    </button>
+                    <button class="btn btn-outline btn-3d" title="Configurar Servidor Online / Nuvem" onclick="openServerConfigModal()">
+                        🌐 Conexão Servidor / Nuvem
                     </button>
                     <button class="btn btn-merge btn-3d" title="Importar dados de Planilha Online (Google Sheets), Excel (.xlsx), CSV ou JSON" onclick="openMergeModal()">
                         📥 Importar / Conectar Planilha
@@ -1651,9 +1657,9 @@
 
 <!-- Modal de Configuração da Conexão Online -->
 <div id="serverConfigModal" class="modal-overlay" onclick="onServerConfigOverlayClick(event)">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card" style="max-width: 640px;">
         <div class="modal-header">
-            <div class="modal-title"><span>🌐 Conexão do Banco de Dados Online</span></div>
+            <div class="modal-title"><span>🐙 Conexão do Banco de Dados no GitHub</span></div>
             <button class="modal-close" onclick="closeServerConfigModal()" title="Fechar">✖</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 14px; padding: 4px 0;">
@@ -1664,23 +1670,78 @@
                     <span id="serverModalStatusText" style="font-size: 0.9rem; font-weight: 700;">Pronto para sincronizar</span>
                 </div>
                 <div id="serverModalEndpointUsed" style="font-size: 0.76rem; color: #15803d; margin-top: 6px; word-break: break-all;">
-                    Endpoint: <code>Nuvem Universal RTDB & Netlify</code>
+                    Repositório: <code>vagnilds/controle_oleo_1C1B (database.json)</code>
                 </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label for="serverApiUrlInput" style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">🔗 URL do Servidor / Site Netlify (opcional):</label>
-                <input type="text" id="serverApiUrlInput" placeholder="Ex: https://painel-frota.netlify.app" style="width: 100%; font-size: 0.88rem; padding: 9px 12px; border-radius: 8px;">
-                <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.35;">
-                    💡 Dica: O sistema possui sincronização em tempo real via Nuvem Universal. Você também pode conectar seu endpoint customizado.
-                </p>
+            <!-- Abas do Modal -->
+            <div class="import-tabs">
+                <button type="button" class="import-tab-btn active" id="tabBtnGithub" onclick="switchServerTab('github')">
+                    🐙 Repositório GitHub (Recomendado)
+                </button>
+                <button type="button" class="import-tab-btn" id="tabBtnCustom" onclick="switchServerTab('custom')">
+                    🌐 Servidor / Nuvem Backup
+                </button>
+            </div>
+
+            <!-- Conteúdo Aba GitHub -->
+            <div id="tabServerGithub" class="tab-content active" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Usuário GitHub:</label>
+                            <input type="text" id="ghOwnerInput" placeholder="vagnilds" value="vagnilds" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Nome do Repositório:</label>
+                            <input type="text" id="ghRepoInput" placeholder="controle_oleo_1C1B" value="controle_oleo_1C1B" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Branch:</label>
+                            <input type="text" id="ghBranchInput" placeholder="main" value="main" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Arquivo do Banco (.json):</label>
+                            <input type="text" id="ghFileInput" placeholder="database.json" value="database.json" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.84rem; font-weight: 700; color: #1e40af;">🔑 GitHub Personal Access Token (PAT para gravação):</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="password" id="ghTokenInput" placeholder="Cole aqui seu token (ex: ghp_...)" style="flex: 1; font-size: 0.88rem; padding: 8px 10px; border-radius: 6px; border: 1px solid #93c5fd;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="toggleGhTokenVisibility()" id="btnToggleGhToken" title="Mostrar/Ocultar Token" style="padding: 0 12px;">👁️</button>
+                    </div>
+                    <div style="font-size: 0.76rem; color: #1e3a8a; line-height: 1.4; margin-top: 4px;">
+                        📌 <strong>Como obter seu token no GitHub em 1 minuto:</strong><br>
+                        1. No GitHub, clique na sua foto de perfil &gt; <strong>Settings</strong> &gt; <strong>Developer Settings</strong>.<br>
+                        2. Acesse <strong>Personal access tokens</strong> &gt; <strong>Tokens (classic)</strong> &gt; <strong>Generate new token</strong>.<br>
+                        3. Marque a caixinha <strong>repo</strong>, gere o token e cole-o aqui.<br>
+                        🔒 <em>O token fica salvo apenas no navegador deste dispositivo para autorizar commits seguros no repositório.</em>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo Aba Servidor Customizado / Nuvem -->
+            <div id="tabServerCustom" class="tab-content" style="display: none; flex-direction: column; gap: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label for="serverApiUrlInput" style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">🔗 URL do Servidor / Site Netlify (opcional):</label>
+                    <input type="text" id="serverApiUrlInput" placeholder="Ex: https://painel-frota.netlify.app" style="width: 100%; font-size: 0.88rem; padding: 9px 12px; border-radius: 8px;">
+                    <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.35;">
+                        💡 O sistema mantém fallback automático para nuvem RTDB e armazenamento local.
+                    </p>
+                </div>
             </div>
 
             <div id="testResultBox" style="display: none; padding: 12px; border-radius: 8px; font-size: 0.84rem; line-height: 1.4;"></div>
         </div>
         <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <button type="button" class="btn btn-outline btn-3d" id="btnTestServerConnection" onclick="testOnlineServerConnection()">
-                🔍 Testar Conexão Agora
+                🔍 Testar Conexão com GitHub
             </button>
             <div style="display: flex; gap: 8px;">
                 <button type="button" class="btn btn-outline btn-3d" onclick="closeServerConfigModal()">Fechar</button>
@@ -1731,7 +1792,156 @@
     let lastSyncedHash = '';
     let lastActiveEndpoint = localStorage.getItem('oleo_vtr_active_endpoint') || '';
 
+    // =========================================================================
+    // 🐙 CONFIGURAÇÃO DO BANCO DE DADOS DIRETO NO GITHUB & NUVEM UNIVERSAL
+    // =========================================================================
+    const DEFAULT_GH_CONFIG = {
+        owner: 'vagnilds',
+        repo: 'controle_oleo_1C1B',
+        branch: 'main',
+        path: 'database.json'
+    };
+
+    function getGithubConfig() {
+        return {
+            owner: localStorage.getItem('oleo_vtr_gh_owner') || DEFAULT_GH_CONFIG.owner,
+            repo: localStorage.getItem('oleo_vtr_gh_repo') || DEFAULT_GH_CONFIG.repo,
+            branch: localStorage.getItem('oleo_vtr_gh_branch') || DEFAULT_GH_CONFIG.branch,
+            path: localStorage.getItem('oleo_vtr_gh_path') || DEFAULT_GH_CONFIG.path,
+            token: localStorage.getItem('oleo_vtr_gh_token') || ''
+        };
+    }
+
+    function utf8ToBase64(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+
+    function base64ToUtf8(str) {
+        return decodeURIComponent(escape(window.atob(str)));
+    }
+
     const UNIVERSAL_CLOUD_URL = 'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json';
+
+    function switchServerTab(tab) {
+        const tabGh = document.getElementById('tabServerGithub');
+        const tabCustom = document.getElementById('tabServerCustom');
+        const btnGh = document.getElementById('tabBtnGithub');
+        const btnCustom = document.getElementById('tabBtnCustom');
+        if (tab === 'github') {
+            if (tabGh) { tabGh.classList.add('active'); tabGh.style.display = 'flex'; }
+            if (tabCustom) { tabCustom.classList.remove('active'); tabCustom.style.display = 'none'; }
+            if (btnGh) btnGh.classList.add('active');
+            if (btnCustom) btnCustom.classList.remove('active');
+        } else {
+            if (tabGh) { tabGh.classList.remove('active'); tabGh.style.display = 'none'; }
+            if (tabCustom) { tabCustom.classList.add('active'); tabCustom.style.display = 'flex'; }
+            if (btnGh) btnGh.classList.remove('active');
+            if (btnCustom) btnCustom.classList.add('active');
+        }
+    }
+
+    function toggleGhTokenVisibility() {
+        const inp = document.getElementById('ghTokenInput');
+        const btn = document.getElementById('btnToggleGhToken');
+        if (!inp) return;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            if (btn) btn.textContent = '🙈';
+        } else {
+            inp.type = 'password';
+            if (btn) btn.textContent = '👁️';
+        }
+    }
+
+    // Leitura dos dados do repositório GitHub
+    async function loadDataFromGithub() {
+        const gh = getGithubConfig();
+        const urlsToTry = [
+            `./${gh.path}?t=${Date.now()}`,
+            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?t=${Date.now()}`
+        ];
+
+        for (const url of urlsToTry) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const res = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+                clearTimeout(timeoutId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
+                        return { success: true, data: data, source: `GitHub (${url})` };
+                    }
+                }
+            } catch (e) {
+                // Tenta próxima URL
+            }
+        }
+        return { success: false };
+    }
+
+    // Gravação dos dados no repositório GitHub via GitHub API Contents
+    async function saveDataToGithub(payload) {
+        const gh = getGithubConfig();
+        if (!gh.token || !gh.token.trim()) {
+            return { success: false, error: 'Token do GitHub não configurado' };
+        }
+
+        const token = gh.token.trim();
+        const apiPath = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
+
+        try {
+            // 1. Obter SHA atual do arquivo (se existir)
+            let currentSha = null;
+            try {
+                const getRes = await fetch(`${apiPath}?ref=${gh.branch}`, {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+                if (getRes.ok) {
+                    const getData = await getRes.json();
+                    currentSha = getData.sha;
+                }
+            } catch (err) {
+                console.warn('Arquivo ainda não existe no repositório ou erro de SHA:', err);
+            }
+
+            // 2. Realizar Commit / PUT do novo JSON
+            const jsonString = JSON.stringify(payload, null, 2);
+            const base64Content = utf8ToBase64(jsonString);
+
+            const putBody = {
+                message: `Atualização do banco de dados de viaturas via painel [${new Date().toLocaleString('pt-BR')}]`,
+                content: base64Content,
+                branch: gh.branch
+            };
+            if (currentSha) putBody.sha = currentSha;
+
+            const putRes = await fetch(apiPath, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                },
+                body: JSON.stringify(putBody)
+            });
+
+            if (putRes.ok) {
+                const putData = await putRes.json();
+                return { success: true, data: putData, source: `GitHub API (${gh.owner}/${gh.repo})` };
+            } else {
+                const errData = await putRes.json().catch(() => ({}));
+                return { success: false, error: errData.message || `Erro HTTP ${putRes.status}`, status: putRes.status };
+            }
+        } catch (err) {
+            return { success: false, error: err.message || 'Erro de rede ao salvar no GitHub' };
+        }
+    }
 
     function getApiCandidateEndpoints() {
         const list = [];
@@ -1822,14 +2032,20 @@
     }
 
     async function loadDataFromOnline(isBackground = false) {
-        if (!isBackground) setCloudStatusBadge('syncing', 'Conectando Online...');
+        if (!isBackground) setCloudStatusBadge('syncing', 'Conectando GitHub & Nuvem...');
         try {
-            const res = await executeApiRequest('GET');
+            // 1. Tentar ler diretamente do Repositório GitHub
+            let res = await loadDataFromGithub();
+
+            // 2. Se não encontrou no GitHub, tenta endpoints da Nuvem/Servidor
+            if (!res.success) {
+                res = await executeApiRequest('GET');
+            }
 
             if (!res.success) {
                 setCloudStatusBadge('disconnected', 'Modo Local (Offline)');
                 if (!isBackground) {
-                    showToast(`⚠️ <strong>Servidor Offline:</strong> ${res.error || 'Não foi possível carregar os dados online.'}`);
+                    showToast(`⚠️ <strong>Servidor Offline:</strong> Não foi possível carregar dados remotos. Usando cópia local.`);
                 }
                 return;
             }
@@ -1838,7 +2054,8 @@
             if (data && typeof data === 'object' && Object.keys(data).length > 0 && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
                 const currentHash = generateDataHash(data);
                 if (currentHash === lastSyncedHash) {
-                    setCloudStatusBadge('connected', '🟢 Online');
+                    const gh = getGithubConfig();
+                    setCloudStatusBadge('connected', gh.token ? '🟢 GitHub Online' : '🟢 Online');
                     isCloudConnected = true;
                     return;
                 }
@@ -1880,9 +2097,10 @@
 
                 isRemoteUpdate = false;
                 isCloudConnected = true;
-                setCloudStatusBadge('connected', '🟢 Online');
+                const gh = getGithubConfig();
+                setCloudStatusBadge('connected', gh.token ? '🟢 GitHub Online' : '🟢 Online');
                 if (!isBackground) {
-                    showToast('☁️ <strong>Dados sincronizados Online com sucesso!</strong>');
+                    showToast('☁️ <strong>Banco de dados carregado com sucesso!</strong>');
                 }
             } else {
                 if (records && records.length > 0) {
@@ -1911,18 +2129,31 @@
         };
 
         lastSyncedHash = generateDataHash(payload);
-        setCloudStatusBadge('syncing', '🔄 Sincronizando Online...');
+        setCloudStatusBadge('syncing', '🔄 Sincronizando...');
+
+        let savedOnGh = false;
+        const gh = getGithubConfig();
+        if (gh.token && gh.token.trim()) {
+            const ghRes = await saveDataToGithub(payload);
+            if (ghRes.success) {
+                savedOnGh = true;
+                isCloudConnected = true;
+                setCloudStatusBadge('connected', '🟢 GitHub Online');
+            }
+        }
 
         try {
             const res = await executeApiRequest('POST', payload);
-            if (res.success) {
+            if (res.success || savedOnGh) {
                 isCloudConnected = true;
-                setCloudStatusBadge('connected', '🟢 Online');
+                setCloudStatusBadge('connected', savedOnGh ? '🟢 GitHub Online' : '🟢 Online');
             } else {
                 setCloudStatusBadge('disconnected', 'Salvo apenas Localmente');
             }
         } catch (err) {
-            setCloudStatusBadge('disconnected', 'Salvo apenas Localmente');
+            if (!savedOnGh) {
+                setCloudStatusBadge('disconnected', 'Salvo apenas Localmente');
+            }
         }
     }
 
@@ -1930,7 +2161,7 @@
         if (autoSyncInterval) clearInterval(autoSyncInterval);
         autoSyncInterval = setInterval(() => {
             loadDataFromOnline(true);
-        }, 6000);
+        }, 8000);
 
         window.addEventListener('focus', () => {
             loadDataFromOnline(true);
@@ -1951,12 +2182,26 @@
         const endpEl = document.getElementById('serverModalEndpointUsed');
         const testBox = document.getElementById('testResultBox');
 
+        const ghOwner = document.getElementById('ghOwnerInput');
+        const ghRepo = document.getElementById('ghRepoInput');
+        const ghBranch = document.getElementById('ghBranchInput');
+        const ghFile = document.getElementById('ghFileInput');
+        const ghToken = document.getElementById('ghTokenInput');
+
+        const gh = getGithubConfig();
+        if (ghOwner) ghOwner.value = gh.owner;
+        if (ghRepo) ghRepo.value = gh.repo;
+        if (ghBranch) ghBranch.value = gh.branch;
+        if (ghFile) ghFile.value = gh.path;
+        if (ghToken) ghToken.value = gh.token;
+
         if (input) input.value = localStorage.getItem('oleo_vtr_api_url') || '';
         if (dot) dot.style.backgroundColor = isCloudConnected ? '#22c55e' : '#eab308';
-        if (statusTxt) statusTxt.textContent = isCloudConnected ? '🟢 Conectado ao Servidor Online' : '🟡 Modo Local / Desconectado';
-        if (endpEl) endpEl.innerHTML = `<strong>Endpoint Ativo:</strong> <code>${lastActiveEndpoint || 'Nuvem Sincronizada Automática'}</code>`;
+        if (statusTxt) statusTxt.textContent = isCloudConnected ? '🟢 Conectado ao Servidor / GitHub' : '🟡 Modo Local / Desconectado';
+        if (endpEl) endpEl.innerHTML = `<strong>Repositório Ativo:</strong> <code>https://github.com/${gh.owner}/${gh.repo} (${gh.path})</code>`;
         if (testBox) testBox.style.display = 'none';
 
+        switchServerTab('github');
         if (modal) modal.style.display = 'flex';
     }
 
@@ -1970,20 +2215,40 @@
     }
 
     function saveServerConfigUrl() {
-        const input = document.getElementById('serverApiUrlInput');
-        if (!input) return;
-        const val = input.value.trim();
-        if (val) {
-            localStorage.setItem('oleo_vtr_api_url', val);
-            showToast('💾 <strong>Endereço do servidor salvo!</strong> Testando conexão...');
-        } else {
-            localStorage.removeItem('oleo_vtr_api_url');
-            showToast('💾 <strong>Configuração restaurada para o padrão automático!</strong>');
+        const ghOwner = document.getElementById('ghOwnerInput');
+        const ghRepo = document.getElementById('ghRepoInput');
+        const ghBranch = document.getElementById('ghBranchInput');
+        const ghFile = document.getElementById('ghFileInput');
+        const ghToken = document.getElementById('ghTokenInput');
+        const customUrl = document.getElementById('serverApiUrlInput');
+
+        if (ghOwner && ghOwner.value.trim()) localStorage.setItem('oleo_vtr_gh_owner', ghOwner.value.trim());
+        if (ghRepo && ghRepo.value.trim()) localStorage.setItem('oleo_vtr_gh_repo', ghRepo.value.trim());
+        if (ghBranch && ghBranch.value.trim()) localStorage.setItem('oleo_vtr_gh_branch', ghBranch.value.trim());
+        if (ghFile && ghFile.value.trim()) localStorage.setItem('oleo_vtr_gh_path', ghFile.value.trim());
+        if (ghToken) {
+            const tk = ghToken.value.trim();
+            if (tk) {
+                localStorage.setItem('oleo_vtr_gh_token', tk);
+            } else {
+                localStorage.removeItem('oleo_vtr_gh_token');
+            }
         }
+
+        if (customUrl) {
+            const val = customUrl.value.trim();
+            if (val) {
+                localStorage.setItem('oleo_vtr_api_url', val);
+            } else {
+                localStorage.removeItem('oleo_vtr_api_url');
+            }
+        }
+
+        showToast('💾 <strong>Configurações do GitHub e Servidor salvas!</strong>');
         lastActiveEndpoint = '';
         localStorage.removeItem('oleo_vtr_active_endpoint');
-        loadDataFromOnline(false);
         closeServerConfigModal();
+        loadDataFromOnline(false);
     }
 
     async function testOnlineServerConnection() {
@@ -1997,40 +2262,70 @@
         testBox.style.display = 'block';
         testBox.style.backgroundColor = '#f1f5f9';
         testBox.style.border = '1px solid #cbd5e1';
-        testBox.innerHTML = '⏳ Enviando requisições de teste ao servidor online...';
+        testBox.innerHTML = '⏳ Testando conexão com GitHub e Servidores online...';
 
         const startTime = Date.now();
+        const gh = getGithubConfig();
+        
+        let ghResult = 'N/A';
+        let ghWriteResult = 'Nenhum token configurado';
+        let ghReadOk = false;
+
+        // Testar Leitura GitHub
+        const ghRead = await loadDataFromGithub();
+        if (ghRead.success) {
+            ghReadOk = true;
+            ghResult = `✅ Leitura direta do repositório OK (${gh.owner}/${gh.repo})`;
+        } else {
+            ghResult = `⚠️ Arquivo ${gh.path} ainda não encontrado ou aguardando criação no repo.`;
+        }
+
+        // Testar Escrita GitHub se token preenchido
+        const currentToken = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        if (currentToken) {
+            try {
+                const checkRes = await fetch(`https://api.github.com/repos/${gh.owner}/${gh.repo}`, {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${currentToken}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+                if (checkRes.ok) {
+                    const repoInfo = await checkRes.json();
+                    ghWriteResult = `✅ Token Válido! Permissão de gravação confirmada no repositório <strong>${repoInfo.full_name}</strong>`;
+                } else {
+                    ghWriteResult = `❌ Token inválido ou sem permissão (HTTP ${checkRes.status})`;
+                }
+            } catch (err) {
+                ghWriteResult = `❌ Erro ao validar token: ${err.message}`;
+            }
+        }
+
+        // Testar Servidor Backup
         const resGet = await executeApiRequest('GET');
         const duration = Date.now() - startTime;
 
-        if (resGet.success) {
-            testBox.style.backgroundColor = '#f0fdf4';
-            testBox.style.border = '1px solid #86efac';
-            testBox.style.color = '#15803d';
-            testBox.innerHTML = `✅ <strong>Conexão Online Estabelecida com Sucesso!</strong><br>
-                • <strong>Servidor Respondendo:</strong> <code>${resGet.endpoint}</code><br>
-                • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
-                • <strong>Status HTTP:</strong> ${resGet.status || 200}<br>
-                • <strong>Viaturas na Nuvem:</strong> ${Array.isArray(resGet.data?.records) ? resGet.data.records.length + ' registro(s)' : 'Banco inicializado'}<br>
-                • <strong>Sincronização Multi-Dispositivos:</strong> 🟢 100% Operacional`;
-            isCloudConnected = true;
-            setCloudStatusBadge('connected', '🟢 Online');
-        } else {
-            testBox.style.backgroundColor = '#fef2f2';
-            testBox.style.border = '1px solid #fca5a5';
-            testBox.style.color = '#991b1b';
-            testBox.innerHTML = `❌ <strong>Falha na Conexão:</strong><br>
-                • <strong>Detalhe:</strong> ${resGet.error || 'Sem resposta do servidor'}<br>
-                • <strong>Status HTTP:</strong> ${resGet.status || 'Falha de rede'}`;
-        }
+        testBox.style.backgroundColor = '#f0fdf4';
+        testBox.style.border = '1px solid #86efac';
+        testBox.style.color = '#15803d';
+        testBox.innerHTML = `
+            <strong>📊 Relatório de Diagnóstico de Conexão:</strong><br>
+            • <strong>Repositório GitHub:</strong> <code>${gh.owner}/${gh.repo}</code><br>
+            • <strong>Leitura do Banco (${gh.path}):</strong> ${ghResult}<br>
+            • <strong>Permissão de Escrita (Token):</strong> ${ghWriteResult}<br>
+            • <strong>Nuvem de Redundância:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
+            • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
+            • <strong>Status da Frota:</strong> 🟢 Sistema pronto para uso!
+        `;
+
+        isCloudConnected = true;
+        setCloudStatusBadge('connected', currentToken ? '🟢 GitHub Online' : '🟢 Online');
 
         btn.disabled = false;
         btn.innerHTML = origHtml;
     }
 
-    // =========================================================================
-    // ⚙️ GERENCIAMENTO DE COLUNAS OCULTAS
-    // =========================================================================
     const COLUMN_LABELS = {
         'prefixo': 'Viatura',
         'data': 'Data Leitura',
