@@ -1114,22 +1114,18 @@
 
         <div class="header-actions-area" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
-                <button type="button" class="btn btn-outline btn-sm btn-3d" onclick="openServerConfigModal()" title="Configurar Banco de Dados no Repositório GitHub (database.json)" style="border-color: #3b82f6; color: #1d4ed8; font-weight: 700;">
-                    🐙 Repositório GitHub
-                </button>
-                <button type="button" id="cloudStatusBtn" class="cloud-badge-btn disconnected" onclick="openServerConfigModal()" title="Status da Conexão GitHub / Nuvem (Clique para Configurar)">
+                <button type="button" id="cloudStatusBtn" class="cloud-badge-btn disconnected" onclick="onClickServerConfigBtn()" title="Verificando conexão...">
                     <span class="cloud-dot"></span>
-                    <span id="cloudStatusText">Conectando GitHub...</span>
+                    <span id="cloudStatusText">Online</span>
                 </button>
                 <button type="button" id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" title="Alternar entre Modo Noturno e Modo Claro">
                     <span id="themeToggleIcon" class="theme-toggle-icon">🌙</span>
                     <span id="themeToggleText">Modo Noturno</span>
                 </button>
             </div>
-
-            <div class="header-datetime-box" title="Data e Hora da última alteração de status">
+            <div class="header-datetime-box">
                 <span class="header-datetime-label">🕒 Última Atualização:</span>
-                <span class="header-datetime-val" id="lastStatusUpdateText">--/--/---- --:--:--</span>
+                <span id="lastStatusUpdateText" class="header-datetime-val">--/--/---- --:--:--</span>
             </div>
         </div>
     </header>
@@ -1480,16 +1476,10 @@
         <div id="footerActionsContent" class="collapsible-content">
             <div style="display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;">
                 <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: center;">
-                    <button class="btn btn-online btn-3d" title="Sincronizar dados agora na nuvem online" onclick="loadDataFromOnline(false)">
-                        ☁️ Sincronizar Online
+                    <button class="btn btn-online btn-3d" title="Configurações de Servidor, Sincronização e Repositório GitHub (Requer Senha)" onclick="onClickServerConfigBtn()">
+                        🌐 Conexão Servidor
                     </button>
-                    <button class="btn btn-3d" style="background: linear-gradient(135deg, #1f2937, #111827); color: white; border-bottom: 2px solid #000;" title="Configurar Banco de Dados no Repositório GitHub (database.json)" onclick="openServerConfigModal()">
-                        🐙 Repositório GitHub (database.json)
-                    </button>
-                    <button class="btn btn-outline btn-3d" title="Configurar Servidor Online / Nuvem" onclick="openServerConfigModal()">
-                        🌐 Conexão Servidor / Nuvem
-                    </button>
-                    <button class="btn btn-merge btn-3d" title="Importar dados de Planilha Online (Google Sheets), Excel (.xlsx), CSV ou JSON" onclick="openMergeModal()">
+                    <button class="btn btn-merge btn-3d"  title="Importar dados de Planilha Online (Google Sheets), Excel (.xlsx), CSV ou JSON" onclick="openMergeModal()">
                         📥 Importar / Conectar Planilha
                     </button>
                     <button class="btn btn-outline btn-3d" title="Exportar Backup JSON Completo" onclick="exportJSON()">
@@ -1659,28 +1649,37 @@
 <div id="serverConfigModal" class="modal-overlay" onclick="onServerConfigOverlayClick(event)">
     <div class="modal-card" style="max-width: 640px;">
         <div class="modal-header">
-            <div class="modal-title"><span>🐙 Conexão do Banco de Dados no GitHub</span></div>
+            <div class="modal-title"><span>🌐 Conexão Servidor & Repositório GitHub</span></div>
             <button class="modal-close" onclick="closeServerConfigModal()" title="Fechar">✖</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 14px; padding: 4px 0;">
+            
+            <!-- Painel de Status da Conexão -->
             <div class="modal-section-box modal-section-online">
-                <label style="font-size: 0.88rem; font-weight: 700; color: #166534; display: block; margin-bottom: 4px;">📡 Status Atual da Conexão:</label>
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                    <span class="cloud-dot" id="serverModalDot" style="width: 10px; height: 10px; background-color: #22c55e;"></span>
-                    <span id="serverModalStatusText" style="font-size: 0.9rem; font-weight: 700;">Pronto para sincronizar</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <label style="font-size: 0.88rem; font-weight: 700; color: #166534; display: block; margin-bottom: 2px;">📡 Status da Conexão:</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <span class="cloud-dot" id="serverModalDot" style="width: 10px; height: 10px; background-color: #22c55e;"></span>
+                            <span id="serverModalStatusText" style="font-size: 0.9rem; font-weight: 700;">Pronto para sincronizar</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-success btn-sm btn-3d" onclick="loadDataFromOnline(false)" title="Forçar leitura e envio imediato dos dados">
+                        🔄 Sincronizar Agora
+                    </button>
                 </div>
                 <div id="serverModalEndpointUsed" style="font-size: 0.76rem; color: #15803d; margin-top: 6px; word-break: break-all;">
-                    Repositório: <code>vagnilds/controle_oleo_1C1B (database.json)</code>
+                    Servidor: <code>Repositório GitHub (vagnilds/controle_oleo_1C1B) & Nuvem RTDB</code>
                 </div>
             </div>
 
             <!-- Abas do Modal -->
             <div class="import-tabs">
                 <button type="button" class="import-tab-btn active" id="tabBtnGithub" onclick="switchServerTab('github')">
-                    🐙 Repositório GitHub (Recomendado)
+                    🐙 Repositório GitHub
                 </button>
                 <button type="button" class="import-tab-btn" id="tabBtnCustom" onclick="switchServerTab('custom')">
-                    🌐 Servidor / Nuvem Backup
+                    🌐 Conexão Nuvem / Servidor
                 </button>
             </div>
 
@@ -1704,24 +1703,25 @@
                             <input type="text" id="ghBranchInput" placeholder="main" value="main" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Arquivo do Banco (.json):</label>
+                            <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">Arquivo do Banco:</label>
                             <input type="text" id="ghFileInput" placeholder="database.json" value="database.json" style="font-size: 0.88rem; padding: 8px 10px; border-radius: 6px;">
                         </div>
                     </div>
                 </div>
 
-                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.84rem; font-weight: 700; color: #1e40af;">🔑 GitHub Personal Access Token (PAT para gravação):</label>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 0.84rem; font-weight: 700; color: #1e40af;">🔑 GitHub Personal Access Token (PAT):</label>
                     <div style="display: flex; gap: 6px;">
-                        <input type="password" id="ghTokenInput" placeholder="Cole aqui seu token (ex: ghp_...)" style="flex: 1; font-size: 0.88rem; padding: 8px 10px; border-radius: 6px; border: 1px solid #93c5fd;">
+                        <input type="password" id="ghTokenInput" placeholder="Cole aqui seu token (ghp_...)" style="flex: 1; font-size: 0.88rem; padding: 8px 10px; border-radius: 6px; border: 1px solid #93c5fd;">
                         <button type="button" class="btn btn-outline btn-sm" onclick="toggleGhTokenVisibility()" id="btnToggleGhToken" title="Mostrar/Ocultar Token" style="padding: 0 12px;">👁️</button>
                     </div>
-                    <div style="font-size: 0.76rem; color: #1e3a8a; line-height: 1.4; margin-top: 4px;">
-                        📌 <strong>Como obter seu token no GitHub em 1 minuto:</strong><br>
-                        1. No GitHub, clique na sua foto de perfil &gt; <strong>Settings</strong> &gt; <strong>Developer Settings</strong>.<br>
-                        2. Acesse <strong>Personal access tokens</strong> &gt; <strong>Tokens (classic)</strong> &gt; <strong>Generate new token</strong>.<br>
-                        3. Marque a caixinha <strong>repo</strong>, gere o token e cole-o aqui.<br>
-                        🔒 <em>O token fica salvo apenas no navegador deste dispositivo para autorizar commits seguros no repositório.</em>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+                        <button type="button" class="btn btn-primary btn-sm btn-3d" onclick="generateMobileSyncLink()" title="Copiar link para abrir no celular e conectar tudo automaticamente">
+                            📱 Copiar Link de Conexão Rápida para o Celular
+                        </button>
+                    </div>
+                    <div style="font-size: 0.76rem; color: #1e3a8a; line-height: 1.4; margin-top: 2px;">
+                        💡 <strong>Sincronia Celular &lt;-&gt; PC:</strong> Para que o celular e o PC sincronizem diretamente pelo GitHub, cole seu Token aqui e clique em <em>'Copiar Link de Conexão Rápida para o Celular'</em>. Abra o link no WhatsApp/Navegador do celular e ele estará 100% conectado na mesma hora!
                     </div>
                 </div>
             </div>
@@ -1732,7 +1732,7 @@
                     <label for="serverApiUrlInput" style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">🔗 URL do Servidor / Site Netlify (opcional):</label>
                     <input type="text" id="serverApiUrlInput" placeholder="Ex: https://painel-frota.netlify.app" style="width: 100%; font-size: 0.88rem; padding: 9px 12px; border-radius: 8px;">
                     <p style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.35;">
-                        💡 O sistema mantém fallback automático para nuvem RTDB e armazenamento local.
+                        💡 O sistema sincroniza automaticamente via Netlify / RTDB e GitHub com redundância completa.
                     </p>
                 </div>
             </div>
@@ -1741,7 +1741,7 @@
         </div>
         <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <button type="button" class="btn btn-outline btn-3d" id="btnTestServerConnection" onclick="testOnlineServerConnection()">
-                🔍 Testar Conexão com GitHub
+                🔍 Testar Conexão
             </button>
             <div style="display: flex; gap: 8px;">
                 <button type="button" class="btn btn-outline btn-3d" onclick="closeServerConfigModal()">Fechar</button>
@@ -1822,6 +1822,57 @@
 
     const UNIVERSAL_CLOUD_URL = 'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json';
 
+    // Gerar link de conexão rápida para enviar ao celular
+    function generateMobileSyncLink() {
+        const gh = getGithubConfig();
+        const token = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        if (!token) {
+            alert('⚠️ Cole seu Token do GitHub no campo acima antes de gerar o link de sincronização para o celular!');
+            return;
+        }
+        
+        saveServerConfigUrl();
+        
+        const base = window.location.origin + window.location.pathname;
+        const syncUrl = `${base}#sync_token=${encodeURIComponent(token)}&owner=${encodeURIComponent(gh.owner)}&repo=${encodeURIComponent(gh.repo)}`;
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(syncUrl).then(() => {
+                showToast('📱 <strong>Link copiado!</strong> Envie pelo WhatsApp e abra no celular para conectar tudo automaticamente.');
+                alert('✅ Link de conexão rápida copiado!\n\nEnvie este link para você mesmo no WhatsApp e abra-o no celular. Ao abrir, o celular se configurará sozinho e sincronizará em tempo real com o PC!');
+            }).catch(() => {
+                prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
+            });
+        } else {
+            prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
+        }
+    }
+
+    // Auto-detectar parâmetros de sincronização na URL (ao abrir link no celular)
+    function checkUrlSyncParams() {
+        const hash = window.location.hash;
+        if (hash && hash.includes('sync_token=')) {
+            try {
+                const params = new URLSearchParams(hash.slice(1));
+                const token = params.get('sync_token');
+                const owner = params.get('owner');
+                const repo = params.get('repo');
+                
+                if (token) localStorage.setItem('oleo_vtr_gh_token', token);
+                if (owner) localStorage.setItem('oleo_vtr_gh_owner', owner);
+                if (repo) localStorage.setItem('oleo_vtr_gh_repo', repo);
+                
+                // Limpar o hash da barra de endereços para segurança
+                history.replaceState(null, null, window.location.pathname);
+                
+                showToast('🎉 <strong>Celular Conectado com Sucesso!</strong> Sincronizando com o PC...');
+                setTimeout(() => loadDataFromOnline(false), 500);
+            } catch (e) {
+                console.warn('Erro ao processar sync via hash:', e);
+            }
+        }
+    }
+
     function switchServerTab(tab) {
         const tabGh = document.getElementById('tabServerGithub');
         const tabCustom = document.getElementById('tabServerCustom');
@@ -1853,24 +1904,24 @@
         }
     }
 
-    // Leitura dos dados do repositório GitHub
+    // Leitura direta do repositório GitHub
     async function loadDataFromGithub() {
         const gh = getGithubConfig();
         const urlsToTry = [
-            `./${gh.path}?t=${Date.now()}`,
-            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?t=${Date.now()}`
+            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?t=${Date.now()}`,
+            `./${gh.path}?t=${Date.now()}`
         ];
 
         for (const url of urlsToTry) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
                 const res = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
                 clearTimeout(timeoutId);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && typeof data === 'object' && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
-                        return { success: true, data: data, source: `GitHub (${url})` };
+                        return { success: true, data: data, source: `GitHub (${gh.owner}/${gh.repo})` };
                     }
                 }
             } catch (e) {
@@ -1891,10 +1942,9 @@
         const apiPath = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
 
         try {
-            // 1. Obter SHA atual do arquivo (se existir)
             let currentSha = null;
             try {
-                const getRes = await fetch(`${apiPath}?ref=${gh.branch}`, {
+                const getRes = await fetch(`${apiPath}?ref=${gh.branch}&t=${Date.now()}`, {
                     headers: {
                         'Accept': 'application/vnd.github+json',
                         'Authorization': `Bearer ${token}`,
@@ -1906,15 +1956,14 @@
                     currentSha = getData.sha;
                 }
             } catch (err) {
-                console.warn('Arquivo ainda não existe no repositório ou erro de SHA:', err);
+                console.warn('Erro ao obter SHA atual do GitHub:', err);
             }
 
-            // 2. Realizar Commit / PUT do novo JSON
             const jsonString = JSON.stringify(payload, null, 2);
             const base64Content = utf8ToBase64(jsonString);
 
             const putBody = {
-                message: `Atualização do banco de dados de viaturas via painel [${new Date().toLocaleString('pt-BR')}]`,
+                message: `Atualização automática da frota [${new Date().toLocaleString('pt-BR')}]`,
                 content: base64Content,
                 branch: gh.branch
             };
@@ -1956,6 +2005,8 @@
             list.push(u);
         }
 
+        if (!list.includes(UNIVERSAL_CLOUD_URL)) list.push(UNIVERSAL_CLOUD_URL);
+
         if (lastActiveEndpoint && !list.includes(lastActiveEndpoint)) {
             list.push(lastActiveEndpoint);
         }
@@ -1968,8 +2019,6 @@
         const remoteNetlify = 'https://painel-frota.netlify.app/api/oleo';
         if (!list.includes(remoteNetlify)) list.push(remoteNetlify);
 
-        if (!list.includes(UNIVERSAL_CLOUD_URL)) list.push(UNIVERSAL_CLOUD_URL);
-
         return list;
     }
 
@@ -1981,7 +2030,7 @@
         for (const endpoint of endpoints) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                const timeoutId = setTimeout(() => controller.abort(), 6000);
 
                 const isFirebase = endpoint.includes('firebaseio.com');
                 const actualMethod = isFirebase ? (method === 'POST' ? 'PUT' : method) : method;
@@ -2013,7 +2062,7 @@
                     lastError = errData.error || `HTTP ${response.status}`;
                 }
             } catch (err) {
-                lastError = err.name === 'AbortError' ? 'Tempo limite esgotado (8s)' : err.message;
+                lastError = err.name === 'AbortError' ? 'Tempo limite esgotado' : err.message;
             }
         }
 
@@ -2024,38 +2073,77 @@
         return JSON.stringify(obj);
     }
 
-    function setCloudStatusBadge(status, text) {
+    let currentConnectionDetail = 'Verificando conexão...';
+
+    function onClickServerConfigBtn() {
+        if (!requireAdminPassword("acessar as configurações do servidor e banco de dados")) return;
+        openServerConfigModal();
+    }
+
+    function setCloudStatusBadge(status, text = '', tooltipText = '') {
         const btn = document.getElementById('cloudStatusBtn');
         const txt = document.getElementById('cloudStatusText');
-        if (btn) btn.className = `cloud-badge-btn ${status}`;
-        if (txt) txt.textContent = text;
+        
+        if (tooltipText) {
+            currentConnectionDetail = tooltipText;
+        }
+
+        if (btn) {
+            btn.className = `cloud-badge-btn ${status}`;
+            btn.title = currentConnectionDetail;
+        }
+
+        if (txt) {
+            if (status === 'connected') {
+                txt.textContent = 'Online';
+            } else if (status === 'syncing') {
+                txt.textContent = 'Sincronizando...';
+            } else {
+                txt.textContent = 'Modo Local';
+            }
+        }
     }
 
     async function loadDataFromOnline(isBackground = false) {
-        if (!isBackground) setCloudStatusBadge('syncing', 'Conectando GitHub & Nuvem...');
+        if (!isBackground) setCloudStatusBadge('syncing', '', 'Sincronizando dados em tempo real...');
         try {
-            // 1. Tentar ler diretamente do Repositório GitHub
-            let res = await loadDataFromGithub();
+            // Comparar fontes online (GitHub vs Nuvem) e pegar a versão mais recente por updatedAt
+            let candidates = [];
 
-            // 2. Se não encontrou no GitHub, tenta endpoints da Nuvem/Servidor
-            if (!res.success) {
-                res = await executeApiRequest('GET');
+            // 1. Tentar ler do GitHub
+            const ghRes = await loadDataFromGithub();
+            if (ghRes.success && ghRes.data) {
+                candidates.push({ source: 'github', data: ghRes.data, time: new Date(ghRes.data.updatedAt || 0).getTime() });
             }
 
-            if (!res.success) {
-                setCloudStatusBadge('disconnected', 'Modo Local (Offline)');
+            // 2. Tentar ler da Nuvem RTDB / Netlify
+            const apiRes = await executeApiRequest('GET');
+            if (apiRes.success && apiRes.data) {
+                candidates.push({ source: 'api', data: apiRes.data, time: new Date(apiRes.data.updatedAt || 0).getTime() });
+            }
+
+            if (candidates.length === 0) {
+                currentConnectionDetail = 'Modo Local (Offline) - Clique para configurar conexão';
+                setCloudStatusBadge('disconnected', '', currentConnectionDetail);
                 if (!isBackground) {
                     showToast(`⚠️ <strong>Servidor Offline:</strong> Não foi possível carregar dados remotos. Usando cópia local.`);
                 }
                 return;
             }
 
-            const data = res.data;
+            // Ordenar pela versão mais recente
+            candidates.sort((a, b) => b.time - a.time);
+            const winner = candidates[0];
+            const data = winner.data;
+            const connectionType = winner.source === 'github' 
+                ? `Conectado ao Repositório GitHub (${getGithubConfig().owner}/${getGithubConfig().repo})` 
+                : 'Conectado à Nuvem Universal RTDB';
+
             if (data && typeof data === 'object' && Object.keys(data).length > 0 && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
                 const currentHash = generateDataHash(data);
                 if (currentHash === lastSyncedHash) {
-                    const gh = getGithubConfig();
-                    setCloudStatusBadge('connected', gh.token ? '🟢 GitHub Online' : '🟢 Online');
+                    currentConnectionDetail = connectionType;
+                    setCloudStatusBadge('connected', '', currentConnectionDetail);
                     isCloudConnected = true;
                     return;
                 }
@@ -2097,21 +2185,23 @@
 
                 isRemoteUpdate = false;
                 isCloudConnected = true;
-                const gh = getGithubConfig();
-                setCloudStatusBadge('connected', gh.token ? '🟢 GitHub Online' : '🟢 Online');
+                currentConnectionDetail = connectionType;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
                 if (!isBackground) {
-                    showToast('☁️ <strong>Banco de dados carregado com sucesso!</strong>');
+                    showToast('☁️ <strong>Dados sincronizados com sucesso em todos os dispositivos!</strong>');
                 }
             } else {
                 if (records && records.length > 0) {
                     syncAllDataToOnline(true);
                 } else {
-                    setCloudStatusBadge('connected', '🟢 Online');
+                    currentConnectionDetail = connectionType;
+                    setCloudStatusBadge('connected', '', currentConnectionDetail);
                     isCloudConnected = true;
                 }
             }
         } catch (err) {
-            setCloudStatusBadge('disconnected', 'Modo Local (Offline)');
+            currentConnectionDetail = 'Modo Local (Offline)';
+            setCloudStatusBadge('disconnected', '', currentConnectionDetail);
         }
     }
 
@@ -2129,7 +2219,7 @@
         };
 
         lastSyncedHash = generateDataHash(payload);
-        setCloudStatusBadge('syncing', '🔄 Sincronizando...');
+        setCloudStatusBadge('syncing', '', 'Sincronizando em todos os dispositivos...');
 
         let savedOnGh = false;
         const gh = getGithubConfig();
@@ -2138,22 +2228,29 @@
             if (ghRes.success) {
                 savedOnGh = true;
                 isCloudConnected = true;
-                setCloudStatusBadge('connected', '🟢 GitHub Online');
+                currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})`;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
             }
         }
 
+        let cloudSaved = false;
         try {
             const res = await executeApiRequest('POST', payload);
-            if (res.success || savedOnGh) {
+            if (res.success) {
+                cloudSaved = true;
                 isCloudConnected = true;
-                setCloudStatusBadge('connected', savedOnGh ? '🟢 GitHub Online' : '🟢 Online');
-            } else {
-                setCloudStatusBadge('disconnected', 'Salvo apenas Localmente');
+                if (!savedOnGh) {
+                    currentConnectionDetail = 'Conectado à Nuvem Universal RTDB (Multi-Dispositivos)';
+                }
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
             }
         } catch (err) {
-            if (!savedOnGh) {
-                setCloudStatusBadge('disconnected', 'Salvo apenas Localmente');
-            }
+            console.warn('Erro ao salvar na Nuvem RTDB:', err);
+        }
+
+        if (!cloudSaved && !savedOnGh) {
+            currentConnectionDetail = 'Salvo apenas Localmente';
+            setCloudStatusBadge('disconnected', '', currentConnectionDetail);
         }
     }
 
@@ -2161,7 +2258,7 @@
         if (autoSyncInterval) clearInterval(autoSyncInterval);
         autoSyncInterval = setInterval(() => {
             loadDataFromOnline(true);
-        }, 8000);
+        }, 4000);
 
         window.addEventListener('focus', () => {
             loadDataFromOnline(true);
@@ -2197,8 +2294,8 @@
 
         if (input) input.value = localStorage.getItem('oleo_vtr_api_url') || '';
         if (dot) dot.style.backgroundColor = isCloudConnected ? '#22c55e' : '#eab308';
-        if (statusTxt) statusTxt.textContent = isCloudConnected ? '🟢 Conectado ao Servidor / GitHub' : '🟡 Modo Local / Desconectado';
-        if (endpEl) endpEl.innerHTML = `<strong>Repositório Ativo:</strong> <code>https://github.com/${gh.owner}/${gh.repo} (${gh.path})</code>`;
+        if (statusTxt) statusTxt.textContent = isCloudConnected ? '🟢 Conectado e Sincronizado' : '🟡 Modo Local / Desconectado';
+        if (endpEl) endpEl.innerHTML = `<strong>Status Atual:</strong> <code>${currentConnectionDetail}</code>`;
         if (testBox) testBox.style.display = 'none';
 
         switchServerTab('github');
@@ -2244,7 +2341,7 @@
             }
         }
 
-        showToast('💾 <strong>Configurações do GitHub e Servidor salvas!</strong>');
+        showToast('💾 <strong>Configurações salvas com sucesso!</strong>');
         lastActiveEndpoint = '';
         localStorage.removeItem('oleo_vtr_active_endpoint');
         closeServerConfigModal();
@@ -2262,22 +2359,20 @@
         testBox.style.display = 'block';
         testBox.style.backgroundColor = '#f1f5f9';
         testBox.style.border = '1px solid #cbd5e1';
-        testBox.innerHTML = '⏳ Testando conexão com GitHub e Servidores online...';
+        testBox.innerHTML = '⏳ Testando conexão com GitHub e Nuvem...';
 
         const startTime = Date.now();
         const gh = getGithubConfig();
         
         let ghResult = 'N/A';
-        let ghWriteResult = 'Nenhum token configurado';
-        let ghReadOk = false;
+        let ghWriteResult = 'Nenhum token configurado neste aparelho';
 
         // Testar Leitura GitHub
         const ghRead = await loadDataFromGithub();
         if (ghRead.success) {
-            ghReadOk = true;
-            ghResult = `✅ Leitura direta do repositório OK (${gh.owner}/${gh.repo})`;
+            ghResult = `✅ Leitura do repositório OK (${gh.owner}/${gh.repo})`;
         } else {
-            ghResult = `⚠️ Arquivo ${gh.path} ainda não encontrado ou aguardando criação no repo.`;
+            ghResult = `⚠️ Repositório GitHub ou arquivo database.json aguardando upload.`;
         }
 
         // Testar Escrita GitHub se token preenchido
@@ -2302,7 +2397,7 @@
             }
         }
 
-        // Testar Servidor Backup
+        // Testar Servidor Nuvem Universal
         const resGet = await executeApiRequest('GET');
         const duration = Date.now() - startTime;
 
@@ -2310,17 +2405,18 @@
         testBox.style.border = '1px solid #86efac';
         testBox.style.color = '#15803d';
         testBox.innerHTML = `
-            <strong>📊 Relatório de Diagnóstico de Conexão:</strong><br>
+            <strong>📊 Diagnóstico de Conexão:</strong><br>
             • <strong>Repositório GitHub:</strong> <code>${gh.owner}/${gh.repo}</code><br>
-            • <strong>Leitura do Banco (${gh.path}):</strong> ${ghResult}<br>
-            • <strong>Permissão de Escrita (Token):</strong> ${ghWriteResult}<br>
-            • <strong>Nuvem de Redundância:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
+            • <strong>Leitura do GitHub:</strong> ${ghResult}<br>
+            • <strong>Permissão de Gravação GitHub:</strong> ${ghWriteResult}<br>
+            • <strong>Nuvem Backup:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
             • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
-            • <strong>Status da Frota:</strong> 🟢 Sistema pronto para uso!
+            • <strong>Sincronização Ativa:</strong> 🟢 Atualização a cada 4 segundos
         `;
 
         isCloudConnected = true;
-        setCloudStatusBadge('connected', currentToken ? '🟢 GitHub Online' : '🟢 Online');
+        currentConnectionDetail = currentToken ? `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})` : 'Conectado Online';
+        setCloudStatusBadge('connected', '', currentConnectionDetail);
 
         btn.disabled = false;
         btn.innerHTML = origHtml;
