@@ -1168,11 +1168,19 @@
                 <div class="form-grid">
                     <div class="form-group full">
                         <label for="vehicleSelect">Escolha a Viatura *</label>
-                        <div class="input-btn-group">
-                            <select id="vehicleSelect" required onchange="onVehicleSelectChange()"></select>
-                            <button type="button" class="btn btn-outline btn-3d" title="Adicionar Nova Viatura (Requer Senha)" onclick="addNewVehiclePrompt()">➕ Nova Viatura</button>
-                            <button type="button" class="btn btn-outline btn-3d" title="Renomear Viatura Atual (Requer Senha)" onclick="renameCurrentVehiclePrompt()">✏️ Renomear</button>
-                            <button type="button" class="btn btn-danger btn-3d" title="Excluir Viatura da Lista (Requer Senha)" onclick="deleteCurrentVehiclePrompt()">🗑️ Excluir Viatura</button>
+                        <div class="input-btn-group" style="position: relative;">
+                            <select id="vehicleSelect" required onchange="onVehicleSelectChange()" style="flex: 1; min-width: 180px;"></select>
+                            <button type="button" class="btn btn-outline btn-3d" id="btnEditVehicleGroupToggle" onclick="toggleVehicleEditOptions()" title="Editar ou Gerenciar Viaturas (Requer Senha)">
+                                🚗 Editar Viatura
+                            </button>
+                        </div>
+                        <!-- Painel retrátil dos 3 botões (Nova, Renomear, Excluir) protegido por senha -->
+                        <div id="vehicleEditActionsContainer" style="display: none; margin-top: 8px; padding: 10px 14px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <span style="font-size: 0.82rem; font-weight: 700; color: var(--primary);">⚙️ Opções de Viatura:</span>
+                            <button type="button" class="btn btn-outline btn-sm btn-3d" title="Adicionar Nova Viatura" onclick="addNewVehiclePrompt()">➕ Nova Viatura</button>
+                            <button type="button" class="btn btn-outline btn-sm btn-3d" title="Renomear Viatura Atual" onclick="renameCurrentVehiclePrompt()">✏️ Renomear</button>
+                            <button type="button" class="btn btn-danger btn-sm btn-3d" title="Excluir Viatura da Lista" onclick="deleteCurrentVehiclePrompt()">🗑️ Excluir Viatura</button>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="hideVehicleEditOptions()" title="Fechar" style="margin-left: auto;">✖</button>
                         </div>
                     </div>
                     <!-- Ordem Solicitada: 1° KM Atual, 2° Data, 3° KM Final (Alvo) -->
@@ -1217,9 +1225,9 @@
     <div>
         <div class="section-header-bar">
             <span class="section-header-title">📊 Indicadores de Óleo da Frota</span>
-            <button type="button" class="btn-collapse" onclick="toggleSection('kpiGridContent', this)" title="Ocultar / Expandir Indicadores">▲</button>
+            <button type="button" class="btn-collapse" onclick="toggleSection('kpiGridContent', this)" title="Expandir Indicadores">▼</button>
         </div>
-        <div id="kpiGridContent" class="collapsible-content" style="margin-top: 8px;">
+        <div id="kpiGridContent" class="collapsible-content collapsed" style="margin-top: 8px;">
             <div class="kpi-grid">
                 <div class="kpi-card kpi-total" onclick="setQuickFilter('ALL')">
                     <div class="kpi-title">Total de Viaturas</div>
@@ -1258,9 +1266,9 @@
     <div>
         <div class="section-header-bar">
             <span class="section-header-title">📈 Gráficos Comparativos & Situação da Frota</span>
-            <button type="button" class="btn-collapse" onclick="toggleSection('chartsGridContent', this)" title="Ocultar / Expandir Gráficos">▲</button>
+            <button type="button" class="btn-collapse" onclick="toggleSection('chartsGridContent', this)" title="Expandir Gráficos">▼</button>
         </div>
-        <div id="chartsGridContent" class="collapsible-content" style="margin-top: 8px;">
+        <div id="chartsGridContent" class="collapsible-content collapsed" style="margin-top: 8px;">
             <div class="charts-grid">
                 <div class="chart-card">
                     <div class="card-title">📊 Comparativo de KM Restante por Viatura</div>
@@ -1288,7 +1296,7 @@
                         💡 Exibe o status atual e último KM de cada viatura na frota (com atualização e sobrescrita automática).
                     </p>
                 </div>
-                <button type="button" class="btn-collapse" onclick="toggleSection('tableCardBodyContent', this)" title="Ocultar / Expandir Tabela">▲</button>
+                <button type="button" class="btn-collapse" onclick="toggleSection('tableCardBodyContent', this)" title="Expandir Tabela">▼</button>
             </div>
 
             <!-- Barra de Filtros -->
@@ -1319,7 +1327,7 @@
             </div>
         </div>
 
-        <div id="tableCardBodyContent" class="collapsible-content">
+        <div id="tableCardBodyContent" class="collapsible-content collapsed">
             <div id="hiddenColumnsBar" class="hidden-columns-bar" style="display: none;">
                 <span>👁️ <strong>Colunas ocultas:</strong></span>
                 <div id="hiddenColumnsPills" style="display: inline-flex; gap: 6px; flex-wrap: wrap;"></div>
@@ -1420,7 +1428,7 @@
                         📊 Banco permanente que armazena a quilometragem rodada e trocas de óleo de cada viatura mês a mês.
                     </p>
                 </div>
-                <button type="button" class="btn-collapse" onclick="toggleSection('mileageCardBodyContent', this)" title="Ocultar / Expandir Controle de Rodagem">▲</button>
+                <button type="button" class="btn-collapse" onclick="toggleSection('mileageCardBodyContent', this)" title="Expandir Histórico de Rodagem">▼</button>
             </div>
 
             <!-- Filtros de Rodagem -->
@@ -1446,7 +1454,7 @@
             </div>
         </div>
 
-        <div id="mileageCardBodyContent" class="collapsible-content">
+        <div id="mileageCardBodyContent" class="collapsible-content collapsed">
             <div class="table-responsive">
                 <table>
                     <thead>
@@ -1471,9 +1479,9 @@
     <div class="card" style="padding: 20px;">
         <div class="card-header" style="margin-bottom: 12px;">
             <div class="card-title">⚙️ Comandos & Ações do Banco de Dados</div>
-            <button type="button" class="btn-collapse" onclick="toggleSection('footerActionsContent', this)" title="Ocultar / Expandir Ações">▲</button>
+            <button type="button" class="btn-collapse" onclick="toggleSection('footerActionsContent', this)" title="Expandir Comandos do Banco">▼</button>
         </div>
-        <div id="footerActionsContent" class="collapsible-content">
+        <div id="footerActionsContent" class="collapsible-content collapsed">
             <div style="display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;">
                 <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: center;">
                     <button class="btn btn-online btn-3d" title="Configurações de Servidor, Sincronização e Repositório GitHub (Requer Senha)" onclick="onClickServerConfigBtn()">
@@ -1799,7 +1807,8 @@
         owner: 'vagnilds',
         repo: 'controle_oleo_1C1B',
         branch: 'main',
-        path: 'database.json'
+        path: 'database.json',
+        token: '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'
     };
 
     function getGithubConfig() {
@@ -1808,7 +1817,7 @@
             repo: localStorage.getItem('oleo_vtr_gh_repo') || DEFAULT_GH_CONFIG.repo,
             branch: localStorage.getItem('oleo_vtr_gh_branch') || DEFAULT_GH_CONFIG.branch,
             path: localStorage.getItem('oleo_vtr_gh_path') || DEFAULT_GH_CONFIG.path,
-            token: localStorage.getItem('oleo_vtr_gh_token') || ''
+            token: localStorage.getItem('oleo_vtr_gh_token') || DEFAULT_GH_CONFIG.token
         };
     }
 
@@ -1830,6 +1839,26 @@
         localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
     }
 
+    function utf8ToBase64(str) {
+        try {
+            const bytes = new TextEncoder().encode(str);
+            const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+            return btoa(binString);
+        } catch (e) {
+            return window.btoa(unescape(encodeURIComponent(str)));
+        }
+    }
+
+    function base64ToUtf8(base64) {
+        try {
+            const binString = atob(base64.replace(/\s/g, ''));
+            const bytes = Uint8Array.from(binString, (m) => m.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        } catch (e) {
+            return decodeURIComponent(escape(window.atob(base64.replace(/\s/g, ''))));
+        }
+    }
+
     // Gerar link de conexão rápida para enviar ao celular
     function generateMobileSyncLink() {
         const gh = getGithubConfig();
@@ -1847,7 +1876,7 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(syncUrl).then(() => {
                 showToast('📱 <strong>Link copiado!</strong> Envie pelo WhatsApp e abra no celular para conectar tudo automaticamente.');
-                alert('✅ Link de conexão rápida copiado!\n\nEnvie este link para você mesmo no WhatsApp e abra-o no celular. Ao abrir, o celular se configurará sozinho e sincronizará em tempo real com o PC!');
+                alert('✅ Link de conexão rápida copiado!\n\nEnvie este link para você mesmo no WhatsApp e abra-o no navegador do celular. Ao abrir, o celular se configurará sozinho e salvará diretamente no GitHub em tempo real com o PC!');
             }).catch(() => {
                 prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
             });
@@ -1872,7 +1901,7 @@
                 
                 history.replaceState(null, null, window.location.pathname);
                 
-                showToast('🎉 <strong>Celular Conectado com Sucesso!</strong> Sincronizando com o PC...');
+                showToast('🎉 <strong>Celular Conectado com Sucesso ao GitHub!</strong> Sincronizando com o PC...');
                 setTimeout(() => loadDataFromOnline(false), 300);
             } catch (e) {
                 console.warn('Erro ao processar sync via hash:', e);
@@ -1932,8 +1961,7 @@
             if (res.ok) {
                 const apiData = await res.json();
                 if (apiData && apiData.content) {
-                    const cleanBase64 = apiData.content.replace(/\s/g, '');
-                    const jsonText = decodeURIComponent(escape(window.atob(cleanBase64)));
+                    const jsonText = base64ToUtf8(apiData.content);
                     const parsed = JSON.parse(jsonText);
                     if (parsed && typeof parsed === 'object' && (Array.isArray(parsed.records) || parsed.vehicles || parsed.appTitle)) {
                         return { success: true, data: parsed, sha: apiData.sha, source: `GitHub API (${gh.owner}/${gh.repo})` };
@@ -1971,7 +1999,7 @@
     async function saveDataToGithub(payload) {
         const gh = getGithubConfig();
         if (!gh.token || !gh.token.trim()) {
-            return { success: false, error: 'Token do GitHub não configurado' };
+            return { success: false, error: 'Token do GitHub não configurado neste dispositivo' };
         }
 
         const token = gh.token.trim();
@@ -2143,14 +2171,13 @@
     }
 
     async function loadDataFromOnline(isBackground = false) {
-        // Se estivermos salvando dados locais neste momento, aguardar para não sobrescrever
         if (isSavingInProgress) return;
 
         if (!isBackground) setCloudStatusBadge('syncing', '', 'Sincronizando dados em tempo real...');
         try {
             let candidates = [];
 
-            // 1. Tentar ler do GitHub API (Tempo real, sem cache de CDN)
+            // 1. Tentar ler do GitHub API (Tempo real, sem cache)
             const ghRes = await loadDataFromGithub();
             if (ghRes.success && ghRes.data) {
                 candidates.push({ 
@@ -2189,15 +2216,11 @@
                 : 'Conectado à Nuvem Universal RTDB';
 
             // 🛡️ PROTEÇÃO ANTI-SOBREPOSIÇÃO:
-            // Se o usuário realizou uma alteração LOCAL recente que é mais nova do que o dado recebido do servidor,
-            // NUNCA sobrescrever o dado local com o dado antigo do servidor!
             const currentLocalTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
             if (currentLocalTime > remoteTime && (Date.now() - currentLocalTime) < 45000) {
-                console.log('Alteração local mais recente detectada. Preservando e reenviando para a nuvem/GitHub...');
                 currentConnectionDetail = connectionType;
                 setCloudStatusBadge('connected', '', currentConnectionDetail);
                 isCloudConnected = true;
-                // Reenviar para garantir que o servidor receba a versão mais nova
                 syncAllDataToOnline(true);
                 return;
             }
@@ -2241,7 +2264,6 @@
                     localStorage.setItem('oleo_vtr_last_status_update', data.lastStatusUpdate);
                 }
 
-                // Atualizar o timestamp local para coincidir com o do servidor
                 if (remoteTime > 0) {
                     localLastModifiedTime = remoteTime;
                     localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
@@ -2294,6 +2316,7 @@
         setCloudStatusBadge('syncing', '', 'Sincronizando em todos os dispositivos...');
 
         let savedOnGh = false;
+        let ghError = '';
         const gh = getGithubConfig();
         if (gh.token && gh.token.trim()) {
             const ghRes = await saveDataToGithub(payload);
@@ -2302,6 +2325,10 @@
                 isCloudConnected = true;
                 currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})`;
                 setCloudStatusBadge('connected', '', currentConnectionDetail);
+                showToast('☁️ <strong>Salvo no GitHub com sucesso!</strong> Sincronizando com os outros PCs.');
+            } else {
+                ghError = ghRes.error || 'Erro ao enviar para o GitHub';
+                console.warn('Erro ao salvar no GitHub:', ghRes.error);
             }
         }
 
@@ -2313,8 +2340,9 @@
                 isCloudConnected = true;
                 if (!savedOnGh) {
                     currentConnectionDetail = 'Conectado à Nuvem Universal RTDB (Multi-Dispositivos)';
+                    setCloudStatusBadge('connected', '', currentConnectionDetail);
+                    showToast('☁️ <strong>Salvo na Nuvem com sucesso!</strong>');
                 }
-                setCloudStatusBadge('connected', '', currentConnectionDetail);
             }
         } catch (err) {
             console.warn('Erro ao salvar na Nuvem RTDB:', err);
@@ -2325,14 +2353,20 @@
         if (!cloudSaved && !savedOnGh) {
             currentConnectionDetail = 'Salvo apenas Localmente';
             setCloudStatusBadge('disconnected', '', currentConnectionDetail);
+            if (!gh.token || !gh.token.trim()) {
+                showToast('⚠️ <strong>Salvo apenas no celular:</strong> Este aparelho está sem o Token do GitHub para enviar ao PC. Clique em "Conexão Servidor" para conectar.');
+            } else {
+                showToast(`⚠️ <strong>Erro no GitHub:</strong> ${ghError}`);
+            }
         }
     }
 
     function startAutoSync() {
         if (autoSyncInterval) clearInterval(autoSyncInterval);
+        // Polling a cada 3 segundos para receber alterações instantâneas
         autoSyncInterval = setInterval(() => {
             loadDataFromOnline(true);
-        }, 5000);
+        }, 3000);
 
         window.addEventListener('focus', () => {
             loadDataFromOnline(true);
@@ -2485,7 +2519,7 @@
             • <strong>Permissão de Gravação GitHub:</strong> ${ghWriteResult}<br>
             • <strong>Nuvem Backup:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
             • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
-            • <strong>Sincronização Ativa:</strong> 🟢 Atualização a cada 5 segundos
+            • <strong>Sincronização Ativa:</strong> 🟢 Atualização a cada 3 segundos
         `;
 
         isCloudConnected = true;
@@ -2679,9 +2713,37 @@
         }, 3000);
     }
 
+    let isVehicleEditUnlocked = false;
+
+    function toggleVehicleEditOptions() {
+        const container = document.getElementById('vehicleEditActionsContainer');
+        if (!container) return;
+        if (container.style.display === 'none' || container.style.display === '') {
+            if (!isVehicleEditUnlocked) {
+                if (!requireAdminPassword("editar ou gerenciar viaturas")) return;
+                isVehicleEditUnlocked = true;
+            }
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    }
+
+    function hideVehicleEditOptions() {
+        const container = document.getElementById('vehicleEditActionsContainer');
+        if (container) container.style.display = 'none';
+    }
+
     function toggleSection(contentId, btnEl) {
         const el = document.getElementById(contentId);
         if (!el) return;
+        const isCurrentlyCollapsed = el.classList.contains('collapsed');
+
+        // Se for o setor de Comandos do Banco de Dados e estiver tentando abrir (descer)
+        if (contentId === 'footerActionsContent' && isCurrentlyCollapsed) {
+            if (!requireAdminPassword("expandir os Comandos e Ações do Banco de Dados")) return;
+        }
+
         const isCollapsed = el.classList.toggle('collapsed');
         if (btnEl) {
             btnEl.textContent = isCollapsed ? '▼' : '▲';
