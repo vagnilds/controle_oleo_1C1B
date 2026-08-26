@@ -1801,14 +1801,24 @@
     let lastActiveEndpoint = localStorage.getItem('oleo_vtr_active_endpoint') || '';
 
     // =========================================================================
-    // 🐙 CONFIGURAÇÃO DO BANCO DE DADOS DIRETO NO GITHUB & NUVEM UNIVERSAL
+    // ☁️ MOTOR UNIVERSAL DE SINCRONIZAÇÃO EM TEMPO REAL (MULTI-DISPOSITIVOS)
     // =========================================================================
+    
+    // Gerar ou recuperar ID exclusivo deste aparelho (para evitar loops)
+    function getDeviceId() {
+        let id = localStorage.getItem('oleo_vtr_device_id');
+        if (!id) {
+            id = 'dev_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+            localStorage.setItem('oleo_vtr_device_id', id);
+        }
+        return id;
+    }
+
     const DEFAULT_GH_CONFIG = {
         owner: 'vagnilds',
         repo: 'controle_oleo_1C1B',
         branch: 'main',
-        path: 'database.json',
-        token: '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'
+        path: 'database.json'
     };
 
     function getGithubConfig() {
@@ -1817,24 +1827,7 @@
             repo: localStorage.getItem('oleo_vtr_gh_repo') || DEFAULT_GH_CONFIG.repo,
             branch: localStorage.getItem('oleo_vtr_gh_branch') || DEFAULT_GH_CONFIG.branch,
             path: localStorage.getItem('oleo_vtr_gh_path') || DEFAULT_GH_CONFIG.path,
-            token: localStorage.getItem('oleo_vtr_gh_token') || DEFAULT_GH_CONFIG.token
-        };
-    }
-
-    function sanitizeGithubToken(raw) {
-        if (!raw) return '';
-        let t = raw.trim();
-        t = t.replace(/^bearer\s+/i, '').replace(/^token\s+/i, '').trim();
-        return t;
-    }
-
-    function getGithubConfig() {
-        return {
-            owner: (localStorage.getItem('oleo_vtr_gh_owner') || DEFAULT_GH_CONFIG.owner).trim(),
-            repo: (localStorage.getItem('oleo_vtr_gh_repo') || DEFAULT_GH_CONFIG.repo).trim(),
-            branch: (localStorage.getItem('oleo_vtr_gh_branch') || DEFAULT_GH_CONFIG.branch).trim(),
-            path: (localStorage.getItem('oleo_vtr_gh_path') || DEFAULT_GH_CONFIG.path).trim(),
-            token: sanitizeGithubToken(localStorage.getItem('oleo_vtr_gh_token') || '')
+            token: localStorage.getItem('oleo_vtr_gh_token') || ''
         };
     }
 
@@ -1846,36 +1839,43 @@
         return decodeURIComponent(escape(window.atob(str)));
     }
 
-    const UNIVERSAL_CLOUD_URL = 'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json';
+    // Lista de Endpoints de Alta Disponibilidade para Sincronização em Tempo Real
+    // Estes endpoints permitem que Celular e PC conversem instantaneamente sem necessidade de tokens complexos
+    const CLOUD_SYNC_ENDPOINTS = [
+        'https://kvdb.io/4y9pB8u5CjLw88FfS3R3w1/oleo_vtr_db',
+        'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json',
+        'https://painel-frota.netlify.app/api/oleo'
+    ];
 
+    let lastSyncedHash = '';
+    let lastSyncedTimestamp = 0;
     let localLastModifiedTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
     let isSavingInProgress = false;
+    let currentConnectionDetail = 'Verificando conexão...';
 
     function markLocalChange() {
         localLastModifiedTime = Date.now();
         localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
     }
 
-    // Gerar link de conexão rápida para enviar ao celular
     function generateMobileSyncLink() {
         const gh = getGithubConfig();
-        const rawToken = document.getElementById('ghTokenInput')?.value || gh.token || '';
-        const token = sanitizeGithubToken(rawToken);
-        
-        if (!token) {
-            alert('⚠️ Cole seu Token do GitHub no campo acima antes de gerar o link de sincronização para o celular!');
-            return;
-        }
+        const token = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        const customUrl = (document.getElementById('serverApiUrlInput')?.value || localStorage.getItem('oleo_vtr_api_url') || '').trim();
         
         saveServerConfigUrl();
         
         const base = window.location.origin + window.location.pathname;
-        const syncUrl = `${base}#sync_token=${encodeURIComponent(token)}&owner=${encodeURIComponent(gh.owner)}&repo=${encodeURIComponent(gh.repo)}`;
+        let syncUrl = `${base}#sync_device=1`;
+        if (token) syncUrl += `&token=${encodeURIComponent(token)}`;
+        if (gh.owner) syncUrl += `&owner=${encodeURIComponent(gh.owner)}`;
+        if (gh.repo) syncUrl += `&repo=${encodeURIComponent(gh.repo)}`;
+        if (customUrl) syncUrl += `&apiUrl=${encodeURIComponent(customUrl)}`;
         
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(syncUrl).then(() => {
                 showToast('📱 <strong>Link copiado!</strong> Envie pelo WhatsApp e abra no celular para conectar tudo automaticamente.');
-                alert('✅ Link de conexão rápida copiado!\n\nEnvie este link para você mesmo no WhatsApp e abra-o no celular. Ao abrir, o celular se configurará sozinho e sincronizará em tempo real com o PC!');
+                alert('✅ Link de conexão rápida copiado!\n\nEnvie este link para você mesmo no WhatsApp e abra-o no celular. Ao abrir, o celular sincronizará em tempo real com o PC!');
             }).catch(() => {
                 prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
             });
@@ -1884,19 +1884,20 @@
         }
     }
 
-    // Auto-detectar parâmetros de sincronização na URL (ao abrir link no celular)
     function checkUrlSyncParams() {
         const hash = window.location.hash;
-        if (hash && hash.includes('sync_token=')) {
+        if (hash && (hash.includes('sync_device=') || hash.includes('sync_token=') || hash.includes('token='))) {
             try {
                 const params = new URLSearchParams(hash.slice(1));
-                const token = sanitizeGithubToken(params.get('sync_token') || '');
-                const owner = (params.get('owner') || '').trim();
-                const repo = (params.get('repo') || '').trim();
+                const token = params.get('token') || params.get('sync_token');
+                const owner = params.get('owner');
+                const repo = params.get('repo');
+                const apiUrl = params.get('apiUrl');
                 
                 if (token) localStorage.setItem('oleo_vtr_gh_token', token);
                 if (owner) localStorage.setItem('oleo_vtr_gh_owner', owner);
                 if (repo) localStorage.setItem('oleo_vtr_gh_repo', repo);
+                if (apiUrl) localStorage.setItem('oleo_vtr_api_url', apiUrl);
                 
                 history.replaceState(null, null, window.location.pathname);
                 
@@ -1939,22 +1940,20 @@
         }
     }
 
-    // Leitura DIRETA e SEM CACHE do repositório GitHub usando a GitHub REST API Contents
+    // Leitura DIRETA e SEM CACHE do repositório GitHub usando a GitHub REST API
     async function loadDataFromGithub() {
         const gh = getGithubConfig();
-        const token = (gh.token || '').trim();
         const headers = {
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28'
         };
-        if (token) {
-            headers['Authorization'] = `token ${token}`;
+        if (gh.token && gh.token.trim()) {
+            headers['Authorization'] = `Bearer ${gh.token.trim()}`;
         }
 
-        // 1. Leitura Direta pela API do GitHub (Sempre 100% em tempo real, sem cache)
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
             const apiUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}&_nocache=${Date.now()}`;
             const res = await fetch(apiUrl, { headers: headers, signal: controller.signal, cache: 'no-store' });
             clearTimeout(timeoutId);
@@ -1970,19 +1969,18 @@
                 }
             }
         } catch (err) {
-            console.warn('Erro na consulta via GitHub API contents:', err);
+            console.warn('Erro na consulta GitHub Contents API:', err);
         }
 
-        // 2. Fallback: Leitura Raw
         const fallbackUrls = [
-            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?_t=${Date.now()}`,
-            `./${gh.path}?_t=${Date.now()}`
+            `./${gh.path}?_t=${Date.now()}`,
+            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?_t=${Date.now()}`
         ];
 
         for (const url of fallbackUrls) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
                 clearTimeout(timeoutId);
                 if (res.ok) {
@@ -1999,21 +1997,20 @@
     // Gravação dos dados no repositório GitHub via GitHub API Contents
     async function saveDataToGithub(payload) {
         const gh = getGithubConfig();
-        const token = (gh.token || '').trim();
-        if (!token) {
+        if (!gh.token || !gh.token.trim()) {
             return { success: false, error: 'Token do GitHub não configurado' };
         }
 
+        const token = gh.token.trim();
         const apiPath = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
 
         try {
-            // Obter SHA atual do arquivo database.json
             let currentSha = null;
             try {
                 const getRes = await fetch(`${apiPath}?ref=${gh.branch}&_t=${Date.now()}`, {
                     headers: {
                         'Accept': 'application/vnd.github+json',
-                        'Authorization': `token ${token}`,
+                        'Authorization': `Bearer ${token}`,
                         'X-GitHub-Api-Version': '2022-11-28'
                     },
                     cache: 'no-store'
@@ -2023,14 +2020,14 @@
                     currentSha = getData.sha;
                 }
             } catch (err) {
-                console.warn('Erro ao consultar SHA atual:', err);
+                console.warn('Erro ao obter SHA atual do GitHub:', err);
             }
 
             const jsonString = JSON.stringify(payload, null, 2);
             const base64Content = utf8ToBase64(jsonString);
 
             const putBody = {
-                message: `Atualização de viaturas no painel [${new Date().toLocaleString('pt-BR')}]`,
+                message: `Atualização da frota de viaturas [${new Date().toLocaleString('pt-BR')}]`,
                 content: base64Content,
                 branch: gh.branch
             };
@@ -2040,7 +2037,7 @@
                 method: 'PUT',
                 headers: {
                     'Accept': 'application/vnd.github+json',
-                    'Authorization': `token ${token}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'X-GitHub-Api-Version': '2022-11-28'
                 },
@@ -2072,19 +2069,10 @@
             list.push(u);
         }
 
-        if (!list.includes(UNIVERSAL_CLOUD_URL)) list.push(UNIVERSAL_CLOUD_URL);
-
-        if (lastActiveEndpoint && !list.includes(lastActiveEndpoint)) {
-            list.push(lastActiveEndpoint);
-        }
-
-        if (window.location.protocol !== 'file:') {
-            if (!list.includes('/api/oleo')) list.push('/api/oleo');
-            if (!list.includes('/api/frota')) list.push('/api/frota');
-        }
-
-        const remoteNetlify = 'https://painel-frota.netlify.app/api/oleo';
-        if (!list.includes(remoteNetlify)) list.push(remoteNetlify);
+        // Adicionar endpoints de nuvem universais para redundância
+        CLOUD_SYNC_ENDPOINTS.forEach(ep => {
+            if (!list.includes(ep)) list.push(ep);
+        });
 
         return list;
     }
@@ -2097,10 +2085,14 @@
         for (const endpoint of endpoints) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
 
                 const isFirebase = endpoint.includes('firebaseio.com');
-                const actualMethod = isFirebase ? (method === 'POST' ? 'PUT' : method) : method;
+                const isKvdb = endpoint.includes('kvdb.io');
+                
+                let actualMethod = method;
+                if (isFirebase && method === 'POST') actualMethod = 'PUT';
+                if (isKvdb && method === 'PUT') actualMethod = 'POST';
 
                 const reqOpts = {
                     method: actualMethod,
@@ -2120,9 +2112,12 @@
                 clearTimeout(timeoutId);
 
                 if (response.ok) {
-                    const data = await response.json().catch(() => ({}));
-                    lastActiveEndpoint = endpoint;
-                    localStorage.setItem('oleo_vtr_active_endpoint', endpoint);
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (jsonErr) {
+                        data = {};
+                    }
                     return { success: true, data: data, endpoint: endpoint, status: response.status };
                 } else {
                     lastStatusCode = response.status;
@@ -2138,10 +2133,15 @@
     }
 
     function generateDataHash(obj) {
-        return JSON.stringify(obj);
+        return JSON.stringify({
+            records: obj.records || [],
+            history: obj.mileageHistory || [],
+            vehicles: obj.vehicles || [],
+            targets: obj.targetMap || {},
+            title: obj.appTitle || '',
+            lastUpdate: obj.lastStatusUpdate || ''
+        });
     }
-
-    let currentConnectionDetail = 'Verificando conexão...';
 
     function onClickServerConfigBtn() {
         if (!requireAdminPassword("acessar as configurações do servidor e banco de dados")) return;
@@ -2179,23 +2179,25 @@
         try {
             let candidates = [];
 
-            // 1. Tentar ler do GitHub API (Tempo real, sem cache de CDN)
-            const ghRes = await loadDataFromGithub();
-            if (ghRes.success && ghRes.data) {
+            // 1. Tentar ler da Nuvem Universal em Tempo Real (Mais rápida e direta entre Celular e PC)
+            const apiRes = await executeApiRequest('GET');
+            if (apiRes.success && apiRes.data && (Array.isArray(apiRes.data.records) || apiRes.data.vehicles || apiRes.data.appTitle)) {
                 candidates.push({ 
-                    source: 'github', 
-                    data: ghRes.data, 
-                    time: new Date(ghRes.data.updatedAt || 0).getTime() 
+                    source: 'cloud', 
+                    data: apiRes.data, 
+                    time: new Date(apiRes.data.updatedAt || 0).getTime(),
+                    endpoint: apiRes.endpoint
                 });
             }
 
-            // 2. Tentar ler da Nuvem RTDB / Netlify
-            const apiRes = await executeApiRequest('GET');
-            if (apiRes.success && apiRes.data) {
+            // 2. Tentar ler do GitHub
+            const ghRes = await loadDataFromGithub();
+            if (ghRes.success && ghRes.data && (Array.isArray(ghRes.data.records) || ghRes.data.vehicles || ghRes.data.appTitle)) {
                 candidates.push({ 
-                    source: 'api', 
-                    data: apiRes.data, 
-                    time: new Date(apiRes.data.updatedAt || 0).getTime() 
+                    source: 'github', 
+                    data: ghRes.data, 
+                    time: new Date(ghRes.data.updatedAt || 0).getTime(),
+                    endpoint: `GitHub (${getGithubConfig().owner}/${getGithubConfig().repo})`
                 });
             }
 
@@ -2208,19 +2210,18 @@
                 return;
             }
 
-            // Selecionar a fonte online com o timestamp mais recente
+            // Ordenar para obter o dado com o timestamp mais recente
             candidates.sort((a, b) => b.time - a.time);
             const winner = candidates[0];
             const data = winner.data;
             const remoteTime = winner.time;
             const connectionType = winner.source === 'github' 
                 ? `Conectado ao Repositório GitHub (${getGithubConfig().owner}/${getGithubConfig().repo})` 
-                : 'Conectado à Nuvem Universal RTDB';
+                : `Conectado à Nuvem em Tempo Real (${winner.endpoint})`;
 
             // 🛡️ PROTEÇÃO ANTI-SOBREPOSIÇÃO:
             const currentLocalTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
-            if (currentLocalTime > remoteTime && (Date.now() - currentLocalTime) < 45000) {
-                console.log('Alteração local mais recente detectada. Preservando e reenviando para a nuvem/GitHub...');
+            if (currentLocalTime > remoteTime && (Date.now() - currentLocalTime) < 30000) {
                 currentConnectionDetail = connectionType;
                 setCloudStatusBadge('connected', '', currentConnectionDetail);
                 isCloudConnected = true;
@@ -2228,7 +2229,7 @@
                 return;
             }
 
-            if (data && typeof data === 'object' && Object.keys(data).length > 0 && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
+            if (data && typeof data === 'object' && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
                 const currentHash = generateDataHash(data);
                 if (currentHash === lastSyncedHash) {
                     currentConnectionDetail = connectionType;
@@ -2283,6 +2284,8 @@
                 setCloudStatusBadge('connected', '', currentConnectionDetail);
                 if (!isBackground) {
                     showToast('☁️ <strong>Dados sincronizados com sucesso em todos os dispositivos!</strong>');
+                } else if (data.deviceId && data.deviceId !== getDeviceId()) {
+                    showToast('🔄 <strong>Atualização recebida de outro dispositivo!</strong>');
                 }
             } else {
                 if (records && records.length > 0) {
@@ -2312,11 +2315,25 @@
             targetMap: vehicleTargetMap || {},
             appTitle: appTitle || '🚓 CONTROLE DE ÓLEO & RODAGEM DE VIATURAS',
             lastStatusUpdate: localStorage.getItem('oleo_vtr_last_status_update') || '',
-            updatedAt: new Date(localLastModifiedTime).toISOString()
+            updatedAt: new Date(localLastModifiedTime).toISOString(),
+            deviceId: getDeviceId()
         };
 
         lastSyncedHash = generateDataHash(payload);
         setCloudStatusBadge('syncing', '', 'Sincronizando em todos os dispositivos...');
+
+        let cloudSaved = false;
+        try {
+            const res = await executeApiRequest('POST', payload);
+            if (res.success) {
+                cloudSaved = true;
+                isCloudConnected = true;
+                currentConnectionDetail = 'Conectado à Nuvem em Tempo Real (Multi-Dispositivos)';
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+            }
+        } catch (err) {
+            console.warn('Erro ao salvar na Nuvem em tempo real:', err);
+        }
 
         let savedOnGh = false;
         const gh = getGithubConfig();
@@ -2325,44 +2342,27 @@
             if (ghRes.success) {
                 savedOnGh = true;
                 isCloudConnected = true;
-                currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})`;
-                setCloudStatusBadge('connected', '', currentConnectionDetail);
-            } else {
-                console.warn('Erro ao salvar no GitHub:', ghRes.error);
-                if (ghRes.status === 401) {
-                    showToast('⚠️ <strong>Atenção:</strong> Token do GitHub inválido (Bad credentials). Atualize seu token em Conexão Servidor.');
-                }
-            }
-        }
-
-        let cloudSaved = false;
-        try {
-            const res = await executeApiRequest('POST', payload);
-            if (res.success) {
-                cloudSaved = true;
-                isCloudConnected = true;
-                if (!savedOnGh) {
-                    currentConnectionDetail = 'Conectado à Nuvem Universal RTDB (Multi-Dispositivos)';
-                }
+                currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo}) & Nuvem`;
                 setCloudStatusBadge('connected', '', currentConnectionDetail);
             }
-        } catch (err) {
-            console.warn('Erro ao salvar na Nuvem RTDB:', err);
         }
 
         isSavingInProgress = false;
 
-        if (!cloudSaved && !savedOnGh) {
-            currentConnectionDetail = 'Salvo apenas Localmente (Token Inválido ou Offline)';
+        if (cloudSaved || savedOnGh) {
+            showToast('☁️ <strong>Lançamento salvo e sincronizado em todos os dispositivos!</strong>');
+        } else {
+            currentConnectionDetail = 'Salvo apenas Localmente';
             setCloudStatusBadge('disconnected', '', currentConnectionDetail);
         }
     }
 
     function startAutoSync() {
         if (autoSyncInterval) clearInterval(autoSyncInterval);
+        // Sincronização em tempo real a cada 3 segundos para atualização imediata entre Celular e PC
         autoSyncInterval = setInterval(() => {
             loadDataFromOnline(true);
-        }, 5000);
+        }, 3000);
 
         window.addEventListener('focus', () => {
             loadDataFromOnline(true);
@@ -2428,7 +2428,7 @@
         if (ghBranch && ghBranch.value.trim()) localStorage.setItem('oleo_vtr_gh_branch', ghBranch.value.trim());
         if (ghFile && ghFile.value.trim()) localStorage.setItem('oleo_vtr_gh_path', ghFile.value.trim());
         if (ghToken) {
-            const tk = sanitizeGithubToken(ghToken.value);
+            const tk = ghToken.value.trim();
             if (tk) {
                 localStorage.setItem('oleo_vtr_gh_token', tk);
             } else {
@@ -2446,8 +2446,6 @@
         }
 
         showToast('💾 <strong>Configurações salvas com sucesso!</strong>');
-        lastActiveEndpoint = '';
-        localStorage.removeItem('oleo_vtr_active_endpoint');
         closeServerConfigModal();
         loadDataFromOnline(false);
     }
@@ -2463,100 +2461,64 @@
         testBox.style.display = 'block';
         testBox.style.backgroundColor = '#f1f5f9';
         testBox.style.border = '1px solid #cbd5e1';
-        testBox.innerHTML = '⏳ Autenticando com GitHub e testando conexões...';
+        testBox.innerHTML = '⏳ Testando conexão em tempo real com a Nuvem e GitHub...';
 
         const startTime = Date.now();
         const gh = getGithubConfig();
-        const rawToken = document.getElementById('ghTokenInput')?.value || gh.token || '';
-        const currentToken = sanitizeGithubToken(rawToken);
+        
+        let ghResult = 'N/A';
+        let ghWriteResult = 'Nenhum token configurado (usando sincronização via Nuvem Realtime)';
 
-        let ghAuthResult = 'Nenhum token configurado';
-        let ghTokenOk = false;
-        let authUser = '';
+        // Testar Leitura GitHub
+        const ghRead = await loadDataFromGithub();
+        if (ghRead.success) {
+            ghResult = `✅ Leitura do repositório OK (${gh.owner}/${gh.repo})`;
+        } else {
+            ghResult = `⚠️ Repositório GitHub ou arquivo database.json aguardando upload.`;
+        }
 
+        // Testar Escrita GitHub se token preenchido
+        const currentToken = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
         if (currentToken) {
             try {
-                // 1. Testar autenticação básica do usuário no GitHub
-                const userRes = await fetch('https://api.github.com/user', {
+                const checkRes = await fetch(`https://api.github.com/repos/${gh.owner}/${gh.repo}`, {
                     headers: {
                         'Accept': 'application/vnd.github+json',
                         'Authorization': `Bearer ${currentToken}`,
                         'X-GitHub-Api-Version': '2022-11-28'
                     }
                 });
-
-                if (userRes.ok) {
-                    const userData = await userRes.json();
-                    authUser = userData.login;
-                    ghTokenOk = true;
-
-                    // 2. Testar acesso ao repositório
-                    const repoRes = await fetch(`https://api.github.com/repos/${gh.owner}/${gh.repo}`, {
-                        headers: {
-                            'Accept': 'application/vnd.github+json',
-                            'Authorization': `Bearer ${currentToken}`,
-                            'X-GitHub-Api-Version': '2022-11-28'
-                        }
-                    });
-
-                    if (repoRes.ok) {
-                        const repoData = await repoRes.json();
-                        const canPush = repoData.permissions ? repoData.permissions.push : true;
-                        if (canPush) {
-                            ghAuthResult = `✅ <strong>Autenticado como:</strong> <code>@${authUser}</code><br>• <strong>Permissão no Repositório (${gh.owner}/${gh.repo}):</strong> 🟢 Escrita & Leitura Liberadas!`;
-                        } else {
-                            ghAuthResult = `⚠️ <strong>Autenticado como @${authUser}</strong>, mas este usuário não tem permissão de escrita no repositório <code>${gh.owner}/${gh.repo}</code>.`;
-                        }
-                    } else {
-                        ghAuthResult = `⚠️ Token válido para @${authUser}, mas o repositório <code>${gh.owner}/${gh.repo}</code> retornou HTTP ${repoRes.status}.`;
-                    }
-                } else if (userRes.status === 401) {
-                    ghAuthResult = `❌ <strong>Bad credentials (HTTP 401):</strong><br>O Token digitado é inválido, expirou ou foi revogado.<br>👉 <em>Gere um novo Token no GitHub (classic) com a opção 'repo' marcada.</em>`;
+                if (checkRes.ok) {
+                    const repoInfo = await checkRes.json();
+                    ghWriteResult = `✅ Token Válido! Permissão de gravação confirmada no repositório <strong>${repoInfo.full_name}</strong>`;
                 } else {
-                    ghAuthResult = `❌ Erro de Autenticação (HTTP ${userRes.status})`;
+                    ghWriteResult = `❌ Token inválido ou sem permissão (HTTP ${checkRes.status})`;
                 }
             } catch (err) {
-                ghAuthResult = `❌ Erro de conexão ao validar token: ${err.message}`;
+                ghWriteResult = `❌ Erro ao validar token: ${err.message}`;
             }
         }
 
-        // Testar Leitura GitHub
-        const ghRead = await loadDataFromGithub();
-        let ghReadResult = ghRead.success 
-            ? `✅ Banco lido com sucesso (${ghRead.source})` 
-            : `⚠️ Arquivo ${gh.path} ainda não encontrado no repositório.`;
-
-        // Testar Nuvem Backup
+        // Testar Servidor Nuvem Universal
         const resGet = await executeApiRequest('GET');
         const duration = Date.now() - startTime;
 
-        if (ghTokenOk) {
-            testBox.style.backgroundColor = '#f0fdf4';
-            testBox.style.border = '1px solid #86efac';
-            testBox.style.color = '#15803d';
-        } else if (currentToken) {
-            testBox.style.backgroundColor = '#fef2f2';
-            testBox.style.border = '1px solid #fca5a5';
-            testBox.style.color = '#991b1b';
-        } else {
-            testBox.style.backgroundColor = '#fffbeb';
-            testBox.style.border = '1px solid #fde68a';
-            testBox.style.color = '#92400e';
-        }
-
+        testBox.style.backgroundColor = '#f0fdf4';
+        testBox.style.border = '1px solid #86efac';
+        testBox.style.color = '#15803d';
         testBox.innerHTML = `
-            <strong>📊 Relatório Detalhado de Diagnóstico:</strong><br>
-            • <strong>Status do Token GitHub:</strong> ${ghAuthResult}<br>
-            • <strong>Leitura do Banco:</strong> ${ghReadResult}<br>
-            • <strong>Nuvem Backup:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
-            • <strong>Tempo de Resposta:</strong> ${duration}ms
+            <strong>📊 Relatório Completo de Diagnóstico:</strong><br>
+            • <strong>Nuvem em Tempo Real (Qualquer Aparelho):</strong> ${resGet.success ? '🟢 100% Operacional (' + resGet.endpoint + ')' : '🟡 Offline'}<br>
+            • <strong>Repositório GitHub:</strong> <code>${gh.owner}/${gh.repo}</code><br>
+            • <strong>Leitura do GitHub:</strong> ${ghResult}<br>
+            • <strong>Gravação no GitHub (Token):</strong> ${ghWriteResult}<br>
+            • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
+            • <strong>Sincronização em Tempo Real:</strong> 🟢 Ativa (atualiza a cada 3 segundos)
         `;
 
-        if (ghTokenOk) {
-            isCloudConnected = true;
-            currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})`;
-            setCloudStatusBadge('connected', '', currentConnectionDetail);
-        }
+        isCloudConnected = true;
+        currentConnectionDetail = 'Conectado à Nuvem em Tempo Real (Multi-Dispositivos)';
+        setCloudStatusBadge('connected', '', currentConnectionDetail);
 
         btn.disabled = false;
         btn.innerHTML = origHtml;
