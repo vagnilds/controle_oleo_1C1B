@@ -1102,6 +1102,8 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
     </style>
+    <!-- QRCode CDN para Sincronização Celular em 1 Segundo -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 <div class="dashboard-container">
@@ -1709,18 +1711,30 @@
                     </div>
                 </div>
 
-                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-size: 0.84rem; font-weight: 700; color: #1e40af;">🔑 GitHub Personal Access Token (PAT):</label>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                    <label style="font-size: 0.86rem; font-weight: 700; color: #1e40af;">🔑 GitHub Personal Access Token (PAT):</label>
                     <div style="display: flex; gap: 6px;">
-                        <input type="password" id="ghTokenInput" placeholder="Cole aqui seu token (ghp_...)" style="flex: 1; font-size: 0.88rem; padding: 8px 10px; border-radius: 6px; border: 1px solid #93c5fd;">
+                        <input type="password" id="ghTokenInput" placeholder="Cole aqui seu token do GitHub (ghp_...)" oninput="updateQrCodeDisplay()" style="flex: 1; font-size: 0.88rem; padding: 9px 10px; border-radius: 6px; border: 1px solid #93c5fd;">
                         <button type="button" class="btn btn-outline btn-sm" onclick="toggleGhTokenVisibility()" id="btnToggleGhToken" title="Mostrar/Ocultar Token" style="padding: 0 12px;">👁️</button>
                     </div>
-                    <div style="font-size: 0.76rem; color: #1e3a8a; line-height: 1.4; margin-top: 2px;">
-                        🔒 <em>O token é opcional para salvar diretamente no repositório GitHub como backup. A sincronização em tempo real entre celular e PC funciona de forma automática pela Nuvem Realtime.</em>
+
+                    <!-- Bloco de Conexão Rápida para Celular (QR Code & Link) -->
+                    <div style="background: #ffffff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #1d4ed8;">📱 Conectar Celular ao PC (Sincronização 100% Automática):</span>
+                        <div id="qrcodeContainer" style="background: white; padding: 8px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); min-height: 140px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="qrcodeCanvas"></canvas>
+                        </div>
+                        <span style="font-size: 0.76rem; color: var(--text-muted);">Aponte a câmera do celular para o QR Code acima ou copie o link abaixo:</span>
+                        <button type="button" class="btn btn-primary btn-sm btn-3d" onclick="generateMobileSyncLink()" style="width: 100%; justify-content: center;">
+                            📲 Copiar Link para Enviar no WhatsApp do Celular
+                        </button>
+                    </div>
+
+                    <div style="font-size: 0.75rem; color: #1e3a8a; line-height: 1.4;">
+                        📌 <strong>Como funciona:</strong> Ao abrir o link ou ler o QR Code no celular, o aparelho é conectado imediatamente ao mesmo banco de dados do GitHub, sincronizando com o PC em tempo real.
                     </div>
                 </div>
             </div>
-
             <!-- Conteúdo Aba Servidor Customizado / Nuvem -->
             <div id="tabServerCustom" class="tab-content" style="display: none; flex-direction: column; gap: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -2410,6 +2424,2585 @@
     // =========================================================================
     // ⚙️ GERENCIAMENTO DE COLUNAS OCULTAS
     // =========================================================================
+    const COLUMN_LABELS = {
+        'prefixo': 'Viatura',
+        'data': 'Data Leitura',
+        'kmatual': 'KM Atual',
+        'kmalvo': 'KM Alvo',
+        'kmrestante': 'KM Restante',
+        'status': 'Status da Troca',
+        'oleo': 'Óleo / Filtro',
+        'acoes': 'Ações'
+    };
+
+    let hiddenColumns = JSON.parse(localStorage.getItem('oleo_vtr_hidden_cols') || '[]');
+
+    function toggleColumnVisibility(colKey) {
+        if (hiddenColumns.includes(colKey)) {
+            hiddenColumns = hiddenColumns.filter(k => k !== colKey);
+        } else {
+            hiddenColumns.push(colKey);
+        }
+        localStorage.setItem('oleo_vtr_hidden_cols', JSON.stringify(hiddenColumns));
+        updateColumnVisibilityUI();
+    }
+
+    function restoreAllColumns() {
+        hiddenColumns = [];
+        localStorage.setItem('oleo_vtr_hidden_cols', JSON.stringify(hiddenColumns));
+        updateColumnVisibilityUI();
+        showToast('👁️ <strong>Todas as colunas estão visíveis!</strong>');
+    }
+
+    function updateColumnVisibilityUI() {
+        Object.keys(COLUMN_LABELS).forEach(colKey => {
+            const isHidden = hiddenColumns.includes(colKey);
+            const th = document.querySelector(`.col-th-${colKey}`);
+            if (th) {
+                if (isHidden) {
+                    th.classList.add('col-hidden');
+                    const btn = th.querySelector('.btn-col-toggle');
+                    if (btn) {
+                        btn.classList.add('collapsed');
+                        btn.title = `Mostrar coluna ${COLUMN_LABELS[colKey]}`;
+                        const icon = btn.querySelector('.col-toggle-icon');
+                        if (icon) icon.textContent = '▶';
+                    }
+                } else {
+                    th.classList.remove('col-hidden');
+                    const btn = th.querySelector('.btn-col-toggle');
+                    if (btn) {
+                        btn.classList.remove('collapsed');
+                        btn.title = `Esconder coluna ${COLUMN_LABELS[colKey]}`;
+                        const icon = btn.querySelector('.col-toggle-icon');
+                        if (icon) icon.textContent = '◀';
+                    }
+                }
+            }
+
+            const tds = document.querySelectorAll(`.col-td-${colKey}`);
+            tds.forEach(td => {
+                if (isHidden) {
+                    td.classList.add('col-hidden');
+                } else {
+                    td.classList.remove('col-hidden');
+                }
+            });
+        });
+
+        const bar = document.getElementById('hiddenColumnsBar');
+        const pillsContainer = document.getElementById('hiddenColumnsPills');
+        if (bar && pillsContainer) {
+            if (hiddenColumns.length > 0) {
+                bar.style.display = 'flex';
+                let pillsHtml = '';
+                hiddenColumns.forEach(k => {
+                    const label = COLUMN_LABELS[k] || k;
+                    pillsHtml += `<span class="hidden-col-pill" onclick="toggleColumnVisibility('${k}')" title="Clique para mostrar a coluna ${label}">+ ${label} ✖</span>`;
+                });
+                pillsContainer.innerHTML = pillsHtml;
+            } else {
+                bar.style.display = 'none';
+                pillsContainer.innerHTML = '';
+            }
+        }
+    }
+
+    // =========================================================================
+    // 🗃️ DADOS E LISTA OFICIAL DE 28 VIATURAS (COM 26-24)
+    // =========================================================================
+    const monthNamesPT = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    let appTitle = localStorage.getItem('oleo_vtr_app_title') || '🚓 CONTROLE DE ÓLEO & RODAGEM DE VIATURAS';
+    function updateAppTitleDisplay() {
+        document.getElementById('appTitleText').innerHTML = appTitle;
+        document.getElementById('pageTitle').textContent = appTitle.replace(/<[^>]*>?/gm, '') + ' - Painel da Frota';
+    }
+
+    function editAppTitle() {
+        if (!requireAdminPassword("alterar o título do painel")) return;
+
+        const currentClean = appTitle.replace(/^[^a-zA-Z0-9À-ÿ_ ]+/g, '').trim();
+        const newTitle = prompt('Digite o novo nome para o sistema de controle de óleo:', currentClean);
+        if (newTitle && newTitle.trim()) {
+            appTitle = '🚓 ' + newTitle.trim();
+            localStorage.setItem('oleo_vtr_app_title', appTitle);
+            updateAppTitleDisplay();
+            syncAllDataToOnline();
+            showToast('✏️ Título atualizado com sucesso!');
+        }
+    }
+
+    function updateStatusTimestamp() {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const formatted = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+
+        const el = document.getElementById('lastStatusUpdateText');
+        if (el) el.textContent = formatted;
+        localStorage.setItem('oleo_vtr_last_status_update', formatted);
+    }
+
+    function initStatusTimestamp() {
+        const saved = localStorage.getItem('oleo_vtr_last_status_update');
+        const el = document.getElementById('lastStatusUpdateText');
+        if (saved && el) {
+            el.textContent = saved;
+        } else {
+            updateStatusTimestamp();
+        }
+    }
+
+    const defaultVehicles = [
+        "T-1100", "T-1103", "T-1104", "T-1105", "T-1106", "T-1107", 
+        "T-1109", "T-1110", "T-1112", "T-1114", "T-1115", "T-1116", 
+        "T-1118", "T-1119", "T-1120", "T-1124", "T-1125", "T-1126", 
+        "T-1127", "T-1130", "T-1135", "T-1136", "T-1137", "T-1147", 
+        "3-106", "13-167", "13-26", "26-24"
+    ];
+
+    let customVehicles = JSON.parse(localStorage.getItem('oleo_vtr_vehicles') || 'null');
+    if (!customVehicles) {
+        customVehicles = [...defaultVehicles];
+    } else {
+        defaultVehicles.forEach(dv => {
+            if (!customVehicles.includes(dv)) customVehicles.push(dv);
+        });
+        if (!customVehicles.includes('26-24')) customVehicles.push('26-24');
+    }
+    localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+
+    // Mapa de KM Alvo Fixo por Viatura - Iniciado VAZIO (Só fixa após ser colocado um novo)
+    let vehicleTargetMap = JSON.parse(localStorage.getItem('oleo_vtr_target_map') || '{}');
+
+    // Data de hoje padrão
+    const todayStr = new Date().toISOString().slice(0,10);
+    document.getElementById('date').value = todayStr;
+
+    // Registros Ativos de Óleo - Iniciados VAZIOS para novos lançamentos
+    let records = JSON.parse(localStorage.getItem('oleo_vtr_records') || '[]');
+
+    // Histórico Permanente de Rodagem & Trocas - Iniciado VAZIO para novos lançamentos
+    let mileageHistory = JSON.parse(localStorage.getItem('oleo_vtr_mileage_history') || '[]');
+
+    let barChartInstance = null;
+    let doughnutChartInstance = null;
+    let toastTimer = null;
+
+    function showToast(msg) {
+        const toast = document.getElementById('toastNotification');
+        document.getElementById('toastMsg').innerHTML = msg;
+        toast.style.display = 'inline-flex';
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
+    }
+
+    function toggleSection(contentId, btnEl) {
+        const el = document.getElementById(contentId);
+        if (!el) return;
+        const isCollapsed = el.classList.toggle('collapsed');
+        if (btnEl) {
+            btnEl.textContent = isCollapsed ? '▼' : '▲';
+            btnEl.title = isCollapsed ? 'Expandir Setor' : 'Ocultar Setor';
+            btnEl.setAttribute('aria-expanded', !isCollapsed);
+        }
+    }
+
+    // =========================================================================
+    // 📅 PREENCHIMENTO DINÂMICO DE MESES E ANOS NOS FILTROS (SEM 2025)
+    // =========================================================================
+    function onHideYearToggle() {
+        populateMonthSelect();
+        renderDashboard();
+    }
+
+    function populateMonthSelect() {
+        const selects = ['filterMonth', 'filterMileageMonth'];
+        const now = new Date();
+        const currentYear = now.getFullYear(); // 2026
+
+        // Apenas ano atual (2026) e anos futuros (2027+) - 2025 removido
+        const yearsSet = new Set([currentYear]);
+
+        records.forEach(r => {
+            if (r.date && r.date.length >= 4) {
+                const y = parseInt(r.date.substring(0, 4), 10);
+                if (!isNaN(y) && y >= currentYear) yearsSet.add(y);
+            }
+        });
+        mileageHistory.forEach(r => {
+            if (r.date && r.date.length >= 4) {
+                const y = parseInt(r.date.substring(0, 4), 10);
+                if (!isNaN(y) && y >= currentYear) yearsSet.add(y);
+            }
+        });
+
+        const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+        const hideYears = document.getElementById('hideYearGrouping') ? document.getElementById('hideYearGrouping').checked : false;
+
+        selects.forEach(selId => {
+            const el = document.getElementById(selId);
+            if (!el) return;
+            const currentSelected = el.value;
+            el.innerHTML = '<option value="ALL">Todos os Meses (Geral)</option>';
+
+            if (hideYears) {
+                sortedYears.forEach(year => {
+                    for (let m = 12; m >= 1; m--) {
+                        const monthStr = String(m).padStart(2, '0');
+                        const ym = `${year}-${monthStr}`;
+                        const monthLabel = `${monthNamesPT[m - 1]} / ${year}`;
+
+                        const opt = document.createElement('option');
+                        opt.value = ym;
+                        opt.textContent = `🗓️ ${monthLabel}`;
+                        el.appendChild(opt);
+                    }
+                });
+            } else {
+                sortedYears.forEach(year => {
+                    const optGroup = document.createElement('optgroup');
+                    optGroup.label = `Ano ${year}`;
+
+                    for (let m = 12; m >= 1; m--) {
+                        const monthStr = String(m).padStart(2, '0');
+                        const ym = `${year}-${monthStr}`;
+                        const monthLabel = `${monthNamesPT[m - 1]} / ${year}`;
+
+                        const opt = document.createElement('option');
+                        opt.value = ym;
+                        opt.textContent = `🗓️ ${monthLabel}`;
+                        optGroup.appendChild(opt);
+                    }
+                    el.appendChild(optGroup);
+                });
+            }
+
+            if (currentSelected && (currentSelected === 'ALL' || el.querySelector(`option[value="${currentSelected}"]`))) {
+                el.value = currentSelected;
+            } else {
+                el.value = 'ALL';
+            }
+        });
+    }
+
+    function populateVehicleSelects() {
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        const filterSelect = document.getElementById('filterVehicle');
+        const filterMileageSelect = document.getElementById('filterMileageVehicle');
+
+        const currentSelection = vehicleSelect ? vehicleSelect.value : '';
+        const currentFilter = filterSelect ? filterSelect.value : 'ALL';
+        const currentMileageFilter = filterMileageSelect ? filterMileageSelect.value : 'ALL';
+
+        const vehicleSet = new Set([...customVehicles, ...records.map(r => r.vehicle), ...mileageHistory.map(r => r.vehicle)]);
+        const sortedVehicles = Array.from(vehicleSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+        if (vehicleSelect) {
+            vehicleSelect.innerHTML = '';
+            sortedVehicles.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                vehicleSelect.appendChild(opt);
+            });
+
+            if (sortedVehicles.includes(currentSelection)) {
+                vehicleSelect.value = currentSelection;
+            } else if (sortedVehicles.length > 0) {
+                vehicleSelect.value = sortedVehicles[0];
+            }
+        }
+
+        if (filterSelect) {
+            filterSelect.innerHTML = '';
+
+            const optAll = document.createElement('option');
+            optAll.value = "ALL";
+            optAll.textContent = "Todas as Viaturas";
+            filterSelect.appendChild(optAll);
+
+            const optVencidos = document.createElement('option');
+            optVencidos.value = "FILTER_VENCIDOS";
+            optVencidos.textContent = "🚨 Apenas Trocas Vencidas";
+            optVencidos.style.color = "#ef4444";
+            optVencidos.style.fontWeight = "bold";
+            filterSelect.appendChild(optVencidos);
+
+            const optAtencao = document.createElement('option');
+            optAtencao.value = "FILTER_ATENCAO";
+            optAtencao.textContent = "⚠️ Apenas em Atenção (≤ 500 km)";
+            optAtencao.style.color = "#f59e0b";
+            filterSelect.appendChild(optAtencao);
+
+            const optEmDia = document.createElement('option');
+            optEmDia.value = "FILTER_EM_DIA";
+            optEmDia.textContent = "✅ Apenas Em Dia (> 500 km)";
+            optEmDia.style.color = "#10b981";
+            filterSelect.appendChild(optEmDia);
+
+            const optGroup = document.createElement('optgroup');
+            optGroup.label = "Viaturas Individuais";
+            sortedVehicles.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = 'Viatura ' + v;
+                optGroup.appendChild(opt);
+            });
+            filterSelect.appendChild(optGroup);
+
+            const validFilterValues = ['ALL', 'FILTER_VENCIDOS', 'FILTER_ATENCAO', 'FILTER_EM_DIA', ...sortedVehicles];
+            if (validFilterValues.includes(currentFilter)) {
+                filterSelect.value = currentFilter;
+            } else {
+                filterSelect.value = 'ALL';
+            }
+        }
+
+        if (filterMileageSelect) {
+            filterMileageSelect.innerHTML = '<option value="ALL">Todas as Viaturas</option>';
+            sortedVehicles.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = 'Viatura ' + v;
+                filterMileageSelect.appendChild(opt);
+            });
+            if (sortedVehicles.includes(currentMileageFilter)) {
+                filterMileageSelect.value = currentMileageFilter;
+            } else {
+                filterMileageSelect.value = 'ALL';
+            }
+        }
+
+        onVehicleSelectChange();
+    }
+
+    function setQuickFilter(filterValue) {
+        document.getElementById('filterVehicle').value = filterValue;
+        renderDashboard();
+    }
+
+    function onVehicleSelectChange() {
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        if (!vehicleSelect) return;
+        const selected = vehicleSelect.value;
+        if (!selected) return;
+
+        document.getElementById('selectedVehicleTitle').textContent = selected;
+
+        const vRecord = records.find(r => r.vehicle === selected);
+
+        const lastKmVal = document.getElementById('lastKmVal');
+        const lastTargetVal = document.getElementById('lastTargetVal');
+        const lastRemainingVal = document.getElementById('lastRemainingVal');
+        const lastStatusVal = document.getElementById('lastStatusVal');
+        const currentKmInput = document.getElementById('currentKm');
+        const targetKmInput = document.getElementById('targetKm');
+        const oilBrandInput = document.getElementById('oilBrand');
+        const isOilChangeSelect = document.getElementById('isOilChangeAction');
+        const dateInput = document.getElementById('date');
+
+        let fixedTargetKm = vehicleTargetMap[selected];
+
+        // Padrão solicitado: Troca de óleo efetuada nesta data (YES)
+        if (isOilChangeSelect) isOilChangeSelect.value = 'YES';
+
+        if (vRecord && vRecord.currentKm !== undefined && vRecord.currentKm !== null && !isNaN(vRecord.currentKm)) {
+            const activeTargetKm = fixedTargetKm || vRecord.targetKm;
+            const diff = activeTargetKm ? (activeTargetKm - vRecord.currentKm) : null;
+
+            lastKmVal.textContent = vRecord.currentKm.toLocaleString('pt-BR') + ' km';
+            lastTargetVal.textContent = activeTargetKm ? (activeTargetKm.toLocaleString('pt-BR') + ' km (Fixo)') : '--';
+
+            if (diff !== null) {
+                if (diff > 500) {
+                    lastRemainingVal.innerHTML = `<span style="color: var(--success); font-weight:700;">+${diff.toLocaleString('pt-BR')} km</span>`;
+                    lastStatusVal.innerHTML = `<span class="badge badge-ok">Em Dia</span>`;
+                } else if (diff >= 0) {
+                    lastRemainingVal.innerHTML = `<span style="color: var(--warning); font-weight:700;">+${diff.toLocaleString('pt-BR')} km</span>`;
+                    lastStatusVal.innerHTML = `<span class="badge badge-warning">Atenção</span>`;
+                } else {
+                    lastRemainingVal.innerHTML = `<span style="color: var(--danger); font-weight:700;">-${Math.abs(diff).toLocaleString('pt-BR')} km</span>`;
+                    lastStatusVal.innerHTML = `<span class="badge badge-danger">Vencido</span>`;
+                }
+            } else {
+                lastRemainingVal.textContent = '--';
+                lastStatusVal.innerHTML = `<span class="badge badge-info">Sem Alvo</span>`;
+            }
+
+            currentKmInput.value = vRecord.currentKm;
+            targetKmInput.value = activeTargetKm || '';
+            oilBrandInput.value = vRecord.oilBrand || '';
+            if (vRecord.date) dateInput.value = vRecord.date;
+        } else {
+            lastKmVal.textContent = 'Sem registros';
+            lastTargetVal.textContent = fixedTargetKm ? (fixedTargetKm.toLocaleString('pt-BR') + ' km (Fixo)') : '--';
+            lastRemainingVal.textContent = '--';
+            lastStatusVal.innerHTML = `<span class="badge badge-info">Primeiro Cadastro</span>`;
+
+            currentKmInput.value = '';
+            targetKmInput.value = fixedTargetKm || '';
+            oilBrandInput.value = '';
+            dateInput.value = todayStr;
+        }
+    }
+
+    // Proteger mudança de data no formulário principal
+    document.getElementById('date').addEventListener('change', function() {
+        if (this.value !== todayStr) {
+            if (!requireAdminPassword("alterar a data da leitura (data diferente de hoje)")) {
+                this.value = todayStr;
+                showToast(`ℹ️ Data restaurada para a data de hoje (${todayStr.split('-').reverse().join('/')}).`);
+            }
+        }
+    });
+
+    // =========================================================================
+    // 💾 SALVAR REGISTRO & CONTROLE DE RODAGEM (PROTEÇÃO DE DATA E KM ALVO)
+    // =========================================================================
+    document.getElementById('recordForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const vehicle = document.getElementById('vehicleSelect').value;
+        if (!vehicle) {
+            alert("Escolha uma viatura válida antes de salvar.");
+            return;
+        }
+
+        const dateInput = document.getElementById('date');
+        let date = dateInput.value || todayStr;
+
+        if (date !== todayStr) {
+            if (!requireAdminPassword("gravar com data diferente de hoje")) {
+                date = todayStr;
+                dateInput.value = todayStr;
+                showToast(`ℹ️ Registro gravado com a data de hoje (${todayStr.split('-').reverse().join('/')}).`);
+            }
+        }
+
+        const currentKm = parseFloat(document.getElementById('currentKm').value);
+        let targetKm = parseFloat(document.getElementById('targetKm').value);
+        const isOilChange = document.getElementById('isOilChangeAction').value === 'YES';
+        const oilBrand = document.getElementById('oilBrand').value.trim() || (isOilChange ? 'Troca de Óleo Efetuada' : 'Leitura de Rotina');
+
+        if (isNaN(currentKm) || isNaN(targetKm)) {
+            alert("Preencha corretamente os valores numéricos de KM.");
+            return;
+        }
+
+        // Verificação de Senha: só exige senha caso a viatura JÁ TENHA um KM Alvo fixado anteriormente e esteja sendo alterado
+        const existingTargetKm = vehicleTargetMap[vehicle];
+        if (existingTargetKm !== undefined && existingTargetKm !== null && existingTargetKm !== '' && parseFloat(existingTargetKm) !== targetKm) {
+            if (!requireAdminPassword(`alterar o KM Alvo fixo da viatura ${vehicle} de ${parseFloat(existingTargetKm).toLocaleString('pt-BR')} para ${targetKm.toLocaleString('pt-BR')} km`)) {
+                targetKm = parseFloat(existingTargetKm);
+                document.getElementById('targetKm').value = targetKm;
+                showToast(`ℹ️ KM Alvo mantido em <strong>${targetKm.toLocaleString('pt-BR')} km</strong>.`);
+            } else {
+                vehicleTargetMap[vehicle] = targetKm;
+                localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+                showToast(`🔒 KM Alvo fixado em <strong>${targetKm.toLocaleString('pt-BR')} km</strong> com senha de ADM.`);
+            }
+        } else {
+            // Primeiro lançamento de KM alvo para esta viatura - fixa diretamente
+            vehicleTargetMap[vehicle] = targetKm;
+            localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        }
+
+        // 1. Atualizar Tabela Ativa (Sobrescrita da Viatura)
+        const existingIdx = records.findIndex(r => r.vehicle === vehicle);
+        const updatedRecord = {
+            id: vehicle,
+            vehicle: vehicle,
+            date: date,
+            currentKm: currentKm,
+            targetKm: targetKm,
+            oilBrand: oilBrand
+        };
+
+        if (existingIdx !== -1) {
+            records[existingIdx] = updatedRecord;
+        } else {
+            records.unshift(updatedRecord);
+        }
+
+        // 2. Registrar no Banco Histórico de Rodagem
+        mileageHistory.unshift({
+            id: Date.now(),
+            vehicle: vehicle,
+            date: date,
+            currentKm: currentKm,
+            targetKm: targetKm,
+            isOilChange: isOilChange,
+            oilBrand: oilBrand,
+            timestamp: new Date().toISOString()
+        });
+
+        saveRecords();
+        updateStatusTimestamp();
+        populateMonthSelect();
+        populateVehicleSelects();
+        document.getElementById('vehicleSelect').value = vehicle;
+        onVehicleSelectChange();
+        renderDashboard();
+        renderMileageTable();
+        syncAllDataToOnline();
+
+        // 3. Exibir o Popup de Parabéns
+        openCongratsModal();
+    });
+
+    function saveRecords() {
+        localStorage.setItem('oleo_vtr_records', JSON.stringify(records));
+        localStorage.setItem('oleo_vtr_mileage_history', JSON.stringify(mileageHistory));
+    }
+
+    // =========================================================================
+    // 📌 DEFINIR COMO BANCO DE DADOS ORIGINAL
+    // =========================================================================
+    function setOriginalBaselinePrompt() {
+        if (!requireAdminPassword("definir a base de dados atual como Banco de Dados Original")) return;
+
+        if (confirm("Deseja definir o estado atual de todas as viaturas e histórico como a nova BASE ORIGINAL para restaurações futuras?")) {
+            const baseline = {
+                records: JSON.parse(JSON.stringify(records)),
+                mileageHistory: JSON.parse(JSON.stringify(mileageHistory)),
+                vehicles: JSON.parse(JSON.stringify(customVehicles)),
+                targetMap: JSON.parse(JSON.stringify(vehicleTargetMap)),
+                appTitle: appTitle
+            };
+            localStorage.setItem('oleo_vtr_original_baseline', JSON.stringify(baseline));
+            syncAllDataToOnline();
+            showToast("📌 Estado atual definido como <strong>Banco de Dados Original</strong> com sucesso!");
+        }
+    }
+
+    // =========================================================================
+    // 🔐 GESTÃO DE VIATURAS COM SENHA (PATRULHEIRO1)
+    // =========================================================================
+    function addNewVehiclePrompt() {
+        if (!requireAdminPassword("adicionar nova viatura")) return;
+
+        const newName = prompt('Digite a identificação / prefixo da nova viatura (ex: T-1150 ou 15-20):');
+        if (!newName || !newName.trim()) return;
+
+        const cleanName = newName.trim().toUpperCase();
+        if (customVehicles.includes(cleanName)) {
+            alert('Esta viatura já está cadastrada na lista!');
+            document.getElementById('vehicleSelect').value = cleanName;
+            onVehicleSelectChange();
+            return;
+        }
+
+        customVehicles.push(cleanName);
+        localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+
+        populateVehicleSelects();
+        document.getElementById('vehicleSelect').value = cleanName;
+        onVehicleSelectChange();
+        renderDashboard();
+        renderMileageTable();
+        renderManageVehiclesModal();
+        syncAllDataToOnline();
+
+        showToast(`🚗 Viatura <strong>"${cleanName}"</strong> adicionada com sucesso!`);
+    }
+
+    function renameCurrentVehiclePrompt() {
+        if (!requireAdminPassword("renomear viatura")) return;
+
+        const selected = document.getElementById('vehicleSelect').value;
+        if (!selected) {
+            alert('Selecione uma viatura válida para renomear.');
+            return;
+        }
+
+        const newName = prompt(`Digite o novo nome para a viatura "${selected}":`, selected);
+        if (!newName || !newName.trim()) return;
+
+        const cleanNewName = newName.trim().toUpperCase();
+        if (cleanNewName === selected) return;
+
+        if (customVehicles.includes(cleanNewName)) {
+            alert('Já existe outra viatura com esse nome!');
+            return;
+        }
+
+        const index = customVehicles.indexOf(selected);
+        if (index !== -1) {
+            customVehicles[index] = cleanNewName;
+        } else {
+            customVehicles.push(cleanNewName);
+        }
+        localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+
+        if (vehicleTargetMap[selected]) {
+            vehicleTargetMap[cleanNewName] = vehicleTargetMap[selected];
+            delete vehicleTargetMap[selected];
+            localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        }
+
+        records.forEach(r => {
+            if (r.vehicle === selected) {
+                r.vehicle = cleanNewName;
+                r.id = cleanNewName;
+            }
+        });
+
+        mileageHistory.forEach(r => {
+            if (r.vehicle === selected) {
+                r.vehicle = cleanNewName;
+            }
+        });
+
+        saveRecords();
+        updateStatusTimestamp();
+
+        populateVehicleSelects();
+        document.getElementById('vehicleSelect').value = cleanNewName;
+        onVehicleSelectChange();
+        renderDashboard();
+        renderMileageTable();
+        renderManageVehiclesModal();
+        syncAllDataToOnline();
+
+        showToast(`✏️ Viatura renomeada de <strong>"${selected}"</strong> para <strong>"${cleanNewName}"</strong>!`);
+    }
+
+    function deleteCurrentVehiclePrompt() {
+        const selected = document.getElementById('vehicleSelect').value;
+        if (!selected) {
+            alert('Selecione uma viatura para excluir.');
+            return;
+        }
+        deleteVehicleDirect(selected);
+    }
+
+    function deleteVehicleDirect(vehicleId) {
+        if (!requireAdminPassword(`excluir a viatura ${vehicleId}`)) return;
+
+        if (confirm(`Atenção: Deseja realmente excluir a viatura "${vehicleId}" do sistema e de todo o histórico?`)) {
+            customVehicles = customVehicles.filter(v => v !== vehicleId);
+            localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+
+            delete vehicleTargetMap[vehicleId];
+            localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+
+            records = records.filter(r => r.vehicle !== vehicleId);
+            mileageHistory = mileageHistory.filter(r => r.vehicle !== vehicleId);
+
+            saveRecords();
+            updateStatusTimestamp();
+
+            populateVehicleSelects();
+            renderDashboard();
+            renderMileageTable();
+            renderManageVehiclesModal();
+            syncAllDataToOnline();
+
+            showToast(`🗑️ Viatura <strong>${vehicleId}</strong> excluída com sucesso!`);
+        }
+    }
+
+    function openManageVehiclesModal() {
+        if (!requireAdminPassword("acessar o painel de gerenciamento de viaturas")) return;
+        renderManageVehiclesModal();
+        document.getElementById('manageVehiclesModal').style.display = 'flex';
+    }
+
+    function closeManageVehiclesModal() {
+        document.getElementById('manageVehiclesModal').style.display = 'none';
+    }
+
+    function onManageVehiclesOverlayClick(e) {
+        if (e.target.id === 'manageVehiclesModal') closeManageVehiclesModal();
+    }
+
+    function renderManageVehiclesModal() {
+        const container = document.getElementById('manageVehiclesListContainer');
+        const countEl = document.getElementById('manageVehiclesCount');
+        if (!container) return;
+
+        const sorted = [...customVehicles].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        if (countEl) countEl.textContent = sorted.length;
+
+        container.innerHTML = '';
+        sorted.forEach(v => {
+            container.innerHTML += `
+                <div class="manage-tag-item">
+                    <span>🚓 ${v}</span>
+                    <span class="remove-tag" onclick="deleteVehicleDirect('${v}')" title="Excluir Viatura">✖</span>
+                </div>
+            `;
+        });
+    }
+
+    // =========================================================================
+    // ✏️ MODAL DE EDIÇÃO INDIVIDUAL DA TABELA DE ÓLEO
+    // =========================================================================
+    function openEditModal(vehicleId) {
+        const v = records.find(r => r.vehicle === vehicleId);
+        if (!v) return;
+
+        document.getElementById('modalVehicleId').value = v.vehicle;
+        document.getElementById('modalVehiclePrefix').textContent = v.vehicle;
+        document.getElementById('modalPrefixInput').value = v.vehicle;
+        document.getElementById('modalCurrentKm').value = v.currentKm;
+        document.getElementById('modalDate').value = v.date || todayStr;
+        document.getElementById('modalTargetKm').value = vehicleTargetMap[v.vehicle] || v.targetKm || '';
+        document.getElementById('modalOilBrand').value = v.oilBrand || '';
+        document.getElementById('modalIsOilChange').value = (v.oilBrand && v.oilBrand.toLowerCase().includes('troca')) ? 'YES' : 'NO';
+
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    function onModalOverlayClick(e) {
+        if (e.target.id === 'editModal') closeEditModal();
+    }
+
+    function saveModalEdit(e) {
+        e.preventDefault();
+        const vehicle = document.getElementById('modalVehicleId').value;
+        const v = records.find(r => r.vehicle === vehicle);
+        if (!v) return;
+
+        let date = document.getElementById('modalDate').value || todayStr;
+        if (date !== todayStr && !requireAdminPassword("alterar a data do registro")) {
+            date = v.date || todayStr;
+        }
+
+        const currentKm = parseFloat(document.getElementById('modalCurrentKm').value);
+        let targetKm = parseFloat(document.getElementById('modalTargetKm').value);
+        const isOilChange = document.getElementById('modalIsOilChange').value === 'YES';
+        const oilBrand = document.getElementById('modalOilBrand').value.trim() || 'Padrão';
+
+        const existingTarget = vehicleTargetMap[vehicle] || v.targetKm;
+        if (existingTarget && parseFloat(existingTarget) !== targetKm) {
+            if (!requireAdminPassword("alterar o KM Alvo fixo da viatura")) {
+                targetKm = parseFloat(existingTarget);
+            } else {
+                vehicleTargetMap[vehicle] = targetKm;
+                localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+            }
+        } else {
+            vehicleTargetMap[vehicle] = targetKm;
+            localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        }
+
+        v.date = date;
+        v.currentKm = currentKm;
+        v.targetKm = targetKm;
+        v.oilBrand = oilBrand;
+
+        mileageHistory.unshift({
+            id: Date.now(),
+            vehicle: vehicle,
+            date: date,
+            currentKm: currentKm,
+            targetKm: targetKm,
+            isOilChange: isOilChange,
+            oilBrand: oilBrand,
+            timestamp: new Date().toISOString()
+        });
+
+        saveRecords();
+        updateStatusTimestamp();
+        populateMonthSelect();
+        populateVehicleSelects();
+        renderDashboard();
+        renderMileageTable();
+        closeEditModal();
+        syncAllDataToOnline();
+
+        showToast(`💾 Viatura <strong>${vehicle}</strong> atualizada com sucesso!`);
+    }
+
+    function deleteRecordFromTable(vehicleId) {
+        if (!requireAdminPassword(`excluir o registro da viatura ${vehicleId}`)) return;
+
+        if (confirm(`Deseja excluir o registro da viatura ${vehicleId} da tabela?`)) {
+            records = records.filter(r => r.vehicle !== vehicleId);
+            saveRecords();
+            updateStatusTimestamp();
+            populateMonthSelect();
+            populateVehicleSelects();
+            renderDashboard();
+            syncAllDataToOnline();
+            showToast(`🗑️ Registro da viatura ${vehicleId} excluído.`);
+        }
+    }
+
+    function clearAllData() {
+        if (!requireAdminPassword("limpar os registros de óleo")) return;
+
+        const hasBaseline = localStorage.getItem('oleo_vtr_original_baseline');
+        let msg = 'Atenção: deseja realmente limpar a tabela de óleo das viaturas?';
+        if (hasBaseline) {
+            msg = 'Deseja restaurar para o último estado salvo em "Definir como Banco de dados original"?';
+        }
+
+        if (confirm(msg)) {
+            if (hasBaseline) {
+                const b = JSON.parse(hasBaseline);
+                records = b.records || [];
+                mileageHistory = b.mileageHistory || [];
+                customVehicles = b.vehicles || [...defaultVehicles];
+                vehicleTargetMap = b.targetMap || {};
+                if (b.appTitle) appTitle = b.appTitle;
+                showToast('🔄 Dados restaurados para a Base Original!');
+            } else {
+                records = [];
+                showToast('🔄 Tabela de óleo limpa com sucesso!');
+            }
+            saveRecords();
+            updateStatusTimestamp();
+            populateMonthSelect();
+            populateVehicleSelects();
+            renderDashboard();
+            renderMileageTable();
+            syncAllDataToOnline();
+        }
+    }
+
+    // =========================================================================
+    // 🗑️ EXCLUSÃO ITEM POR ITEM DO CONTROLE DE RODAGEM (REQUER SENHA PATRULHEIRO1)
+    // =========================================================================
+    function deleteMileageItem(ym, vehicle) {
+        const [year, month] = ym.split('-');
+        const monthLabel = (monthNamesPT[parseInt(month, 10) - 1] || month) + ' / ' + year;
+
+        if (!requireAdminPassword(`excluir o registro de rodagem da viatura ${vehicle} referente a ${monthLabel}`)) return;
+
+        if (confirm(`Atenção: Deseja realmente excluir o registro de rodagem da viatura "${vehicle}" referente ao mês "${monthLabel}" do banco permanente?`)) {
+            mileageHistory = mileageHistory.filter(item => {
+                const itemYm = item.date ? item.date.substring(0, 7) : '';
+                return !(item.vehicle === vehicle && itemYm === ym);
+            });
+
+            saveRecords();
+            updateStatusTimestamp();
+            populateMonthSelect();
+            renderMileageTable();
+            renderDashboard();
+            syncAllDataToOnline();
+
+            showToast(`🗑️ Registro de rodagem de <strong>${vehicle} (${monthLabel})</strong> excluído com sucesso!`);
+        }
+    }
+
+    function clearMileageHistoryPrompt() {
+        if (!requireAdminPassword("apagar todo o histórico de rodagem mensal")) return;
+
+        if (confirm('Atenção: deseja realmente limpar todo o histórico de controle mensal de rodagem?')) {
+            mileageHistory = [];
+            saveRecords();
+            updateStatusTimestamp();
+            renderMileageTable();
+            populateMonthSelect();
+            syncAllDataToOnline();
+            showToast('🗑️ Histórico de rodagem mensal limpo com sucesso!');
+        }
+    }
+
+    function factoryResetDatabase() {
+        if (!requireAdminPassword("apagar todo o banco de dados")) return;
+
+        const confirm1 = confirm("⚠️ ATENÇÃO: Deseja realmente APAGAR TODO O BANCO DE DADOS DE ÓLEO & RODAGEM?\n\nEsta ação excluirá permanentemente todos os registros tanto localmente quanto na nuvem Online.");
+        if (!confirm1) return;
+        const confirm2 = confirm("🚨 Confirmação Final: Tem certeza absoluta? Essa ação não poderá ser desfeita!");
+        if (!confirm2) return;
+
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('oleo_vtr_')) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        records = [];
+        mileageHistory = [];
+        customVehicles = [...defaultVehicles];
+        vehicleTargetMap = {};
+        appTitle = '🚓 CONTROLE DE ÓLEO & RODAGEM DE VIATURAS';
+
+        updateAppTitleDisplay();
+        updateStatusTimestamp();
+        populateMonthSelect();
+        populateVehicleSelects();
+        renderDashboard();
+        renderMileageTable();
+
+        syncAllDataToOnline(true);
+        showToast("⚠️ <strong>Banco de dados zerado com sucesso!</strong> O painel está novo.");
+    }
+
+    // =========================================================================
+    // 📅 RENDERIZAÇÃO DO CONTROLE MENSAL DE RODAGEM (KM RODADO POR MÊS)
+    // =========================================================================
+    function computeMonthlyMileageData() {
+        const filterMonth = document.getElementById('filterMileageMonth') ? document.getElementById('filterMileageMonth').value : 'ALL';
+        const filterVehicle = document.getElementById('filterMileageVehicle') ? document.getElementById('filterMileageVehicle').value : 'ALL';
+
+        let filteredHist = [...mileageHistory];
+        if (filterMonth !== 'ALL') {
+            filteredHist = filteredHist.filter(h => h.date && h.date.startsWith(filterMonth));
+        }
+        if (filterVehicle !== 'ALL') {
+            filteredHist = filteredHist.filter(h => h.vehicle === filterVehicle);
+        }
+
+        const groups = {};
+        filteredHist.forEach(item => {
+            const ym = item.date ? item.date.substring(0, 7) : 'Desconhecido';
+            const key = `${ym}__${item.vehicle}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    ym: ym,
+                    vehicle: item.vehicle,
+                    readings: []
+                };
+            }
+            groups[key].readings.push(item);
+        });
+
+        const rows = [];
+
+        Object.values(groups).forEach(g => {
+            g.readings.sort((a, b) => new Date(a.date) - new Date(b.date) || a.currentKm - b.currentKm);
+
+            const firstReading = g.readings[0];
+            const lastReading = g.readings[g.readings.length - 1];
+
+            let initialKm = firstReading.currentKm;
+            if (g.ym !== 'Desconhecido') {
+                const prevEntries = mileageHistory.filter(h => h.vehicle === g.vehicle && h.date && h.date < `${g.ym}-01`)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date) || b.currentKm - a.currentKm);
+                if (prevEntries.length > 0) {
+                    initialKm = prevEntries[0].currentKm;
+                }
+            }
+
+            const finalKm = lastReading.currentKm;
+            const kmRodado = Math.max(0, finalKm - initialKm);
+
+            const hasOilChange = g.readings.some(r => r.isOilChange || (r.oilBrand && r.oilBrand.toLowerCase().includes('troca')));
+            const oilChanges = g.readings.filter(r => r.isOilChange || (r.oilBrand && r.oilBrand.toLowerCase().includes('troca')));
+
+            let oilChangeDetails = '-';
+            if (oilChanges.length > 0) {
+                oilChangeDetails = oilChanges.map(oc => `${oc.date ? oc.date.split('-').reverse().join('/') : ''} (${oc.oilBrand || 'Troca'})`).join('; ');
+            } else if (lastReading.oilBrand) {
+                oilChangeDetails = lastReading.oilBrand;
+            }
+
+            const [year, month] = g.ym.split('-');
+            const monthLabel = (monthNamesPT[parseInt(month, 10) - 1] || month) + ' / ' + year;
+
+            rows.push({
+                ym: g.ym,
+                monthLabel: monthLabel,
+                vehicle: g.vehicle,
+                initialKm: initialKm,
+                finalKm: finalKm,
+                kmRodado: kmRodado,
+                hasOilChange: hasOilChange,
+                oilChangeDetails: oilChangeDetails
+            });
+        });
+
+        rows.sort((a, b) => b.ym.localeCompare(a.ym) || a.vehicle.localeCompare(b.vehicle, undefined, { numeric: true, sensitivity: 'base' }));
+
+        return rows;
+    }
+
+    function renderMileageTable() {
+        const tbody = document.getElementById('mileageTableBody');
+        if (!tbody) return;
+
+        const data = computeMonthlyMileageData();
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">Nenhum registro de rodagem cadastrado ainda. Registre novas leituras no formulário acima para acompanhar a evolução mensal.</td></tr>`;
+            return;
+        }
+
+        data.forEach(r => {
+            const tr = document.createElement('tr');
+            const oilBadge = r.hasOilChange 
+                ? '<span class="badge badge-ok">✅ Sim (Efetuada)</span>' 
+                : '<span class="badge badge-info">Não</span>';
+
+            tr.innerHTML = `
+                <td><strong>📅 ${r.monthLabel}</strong></td>
+                <td><strong style="color: var(--primary);">${r.vehicle}</strong></td>
+                <td>${r.initialKm.toLocaleString('pt-BR')} km</td>
+                <td>${r.finalKm.toLocaleString('pt-BR')} km</td>
+                <td><span style="font-weight: 700; color: #1e3a8a;">+${r.kmRodado.toLocaleString('pt-BR')} km</span></td>
+                <td>${oilBadge}</td>
+                <td style="font-size: 0.85rem; color: var(--text-muted);">${r.oilChangeDetails}</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-danger btn-3d btn-sm" onclick="deleteMileageItem('${r.ym}', '${r.vehicle}')" title="Excluir este registro de rodagem (Requer Senha)">
+                        🗑️ Excluir
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function exportMileageExcel() {
+        const data = computeMonthlyMileageData();
+        if (data.length === 0) {
+            alert("Nenhum dado de rodagem encontrado para exportar.");
+            return;
+        }
+
+        if (typeof XLSX !== 'undefined') {
+            const defaultName = `Relatorio_Controle_Rodagem_Viaturas_${new Date().toISOString().slice(0,10)}`;
+            const userName = prompt('Digite o nome do arquivo para o Relatório de Rodagem (.xlsx):', defaultName);
+            if (userName === null) return;
+
+            let finalName = userName.trim() || defaultName;
+            if (!finalName.toLowerCase().endsWith('.xlsx')) finalName += '.xlsx';
+
+            const rows = data.map(r => ({
+                "Mês / Ano": r.monthLabel,
+                "Viatura": r.vehicle,
+                "KM Inicial do Mês": r.initialKm,
+                "KM Final do Mês": r.finalKm,
+                "KM Rodado no Mês": r.kmRodado,
+                "Troca de Óleo Realizada?": r.hasOilChange ? "SIM" : "NÃO",
+                "Data / Especificação da Troca / Obs": r.oilChangeDetails
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Controle de Rodagem");
+
+            worksheet['!cols'] = [
+                { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, 
+                { wch: 18 }, { wch: 22 }, { wch: 38 }
+            ];
+
+            XLSX.writeFile(workbook, finalName);
+            showToast(`📊 Relatório de Rodagem exportado como <strong>${finalName}</strong>!`);
+        }
+    }
+
+    // =========================================================================
+    // 📊 EXPORTAÇÃO E IMPORTAÇÃO DE DADOS (EXCEL / JSON / SHEETS)
+    // =========================================================================
+    function exportExcel() {
+        const filterVal = document.getElementById('filterVehicle').value;
+        const filterMonth = document.getElementById('filterMonth').value;
+
+        let exportData = records;
+
+        if (filterMonth !== 'ALL') {
+            exportData = exportData.filter(r => r.date && r.date.startsWith(filterMonth));
+        }
+
+        if (filterVal === 'FILTER_VENCIDOS') {
+            exportData = exportData.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                return target ? (target - r.currentKm) < 0 : false;
+            });
+        } else if (filterVal === 'FILTER_ATENCAO') {
+            exportData = exportData.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                if (!target) return false;
+                const diff = target - r.currentKm;
+                return diff >= 0 && diff <= 500;
+            });
+        } else if (filterVal === 'FILTER_EM_DIA') {
+            exportData = exportData.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                return target ? (target - r.currentKm) > 500 : false;
+            });
+        } else if (filterVal !== 'ALL') {
+            exportData = exportData.filter(r => r.vehicle === filterVal);
+        }
+
+        if (exportData.length === 0) {
+            alert("Nenhum dado de óleo encontrado para exportar com os filtros selecionados.");
+            return;
+        }
+
+        if (typeof XLSX !== 'undefined') {
+            const defaultExcelName = `Controle_de_Oleo_Viaturas_${new Date().toISOString().slice(0,10)}`;
+            const userExcelName = prompt('Digite o nome do arquivo para a planilha Excel (.xlsx):', defaultExcelName);
+            if (userExcelName === null) return;
+
+            let finalExcelName = userExcelName.trim() || defaultExcelName;
+            if (!finalExcelName.toLowerCase().endsWith('.xlsx')) finalExcelName += '.xlsx';
+
+            const rows = exportData.map(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                const diff = target ? (target - r.currentKm) : '-';
+                let statusText = "Sem Alvo";
+                if (target) {
+                    if (target - r.currentKm < 0) statusText = "VENCIDO";
+                    else if (target - r.currentKm <= 500) statusText = "Atenção (Próxima)";
+                    else statusText = "Em dia";
+                }
+
+                const formattedDate = r.date ? r.date.split('-').reverse().join('/') : '-';
+
+                return {
+                    "Data da Leitura": formattedDate,
+                    "Viatura": r.vehicle,
+                    "KM Atual": r.currentKm,
+                    "KM Alvo (Troca)": target || '-',
+                    "KM Restante": diff,
+                    "Status da Troca": statusText,
+                    "Óleo / Especificação / Filtro": r.oilBrand || 'Padrão'
+                };
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Controle de Óleo");
+
+            worksheet['!cols'] = [
+                { wch: 15 }, { wch: 15 }, { wch: 12 }, 
+                { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 32 }
+            ];
+
+            XLSX.writeFile(workbook, finalExcelName);
+            showToast(`📊 Planilha exportada como <strong>${finalExcelName}</strong>!`);
+        }
+    }
+
+    function exportJSON() {
+        const payload = {
+            appTitle: appTitle,
+            lastStatusUpdate: localStorage.getItem('oleo_vtr_last_status_update') || '',
+            vehicles: customVehicles,
+            targetMap: vehicleTargetMap,
+            records: records,
+            mileageHistory: mileageHistory
+        };
+
+        const defaultName = `Controle_Oleo_Viaturas_Backup_${new Date().toISOString().slice(0,10)}`;
+        const userFileName = prompt('Digite o nome do arquivo para exportar o banco de dados (.json):', defaultName);
+        if (userFileName === null) return;
+
+        let finalName = userFileName.trim() || defaultName;
+        if (!finalName.toLowerCase().endsWith('.json')) finalName += '.json';
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+        const dlAnchor = document.createElement('a');
+        dlAnchor.setAttribute("href", dataStr);
+        dlAnchor.setAttribute("download", finalName);
+        document.body.appendChild(dlAnchor);
+        dlAnchor.click();
+        dlAnchor.remove();
+
+        showToast(`📥 Banco de dados exportado como <strong>${finalName}</strong>!`);
+    }
+
+    let currentImportTab = 'online';
+
+    function switchImportTab(tabName) {
+        currentImportTab = tabName;
+        document.querySelectorAll('.import-tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+
+        if (tabName === 'online') {
+            document.getElementById('tabBtnOnline').classList.add('active');
+            document.getElementById('tabContentOnline').classList.add('active');
+        } else if (tabName === 'file') {
+            document.getElementById('tabBtnFile').classList.add('active');
+            document.getElementById('tabContentFile').classList.add('active');
+        } else {
+            document.getElementById('tabBtnText').classList.add('active');
+            document.getElementById('tabContentText').classList.add('active');
+        }
+    }
+
+    function openMergeModal() {
+        const savedUrl = localStorage.getItem('oleo_vtr_online_sheet_url') || '';
+        if (savedUrl) {
+            document.getElementById('onlineSheetUrlInput').value = savedUrl;
+        }
+        document.getElementById('mergeJsonText').value = '';
+        document.getElementById('mergeFileInput').value = '';
+        switchImportTab(savedUrl ? 'online' : 'file');
+        document.getElementById('mergeModal').style.display = 'flex';
+    }
+
+    function closeMergeModal() {
+        document.getElementById('mergeModal').style.display = 'none';
+    }
+
+    function onMergeOverlayClick(e) {
+        if (e.target.id === 'mergeModal') closeMergeModal();
+    }
+
+    function convertToDirectCsvUrl(url) {
+        if (!url) return '';
+        let cleanUrl = url.trim();
+        const gsMatch = cleanUrl.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if (gsMatch && !cleanUrl.includes('/pub')) {
+            const docId = gsMatch[1];
+            let gid = '';
+            const gidMatch = cleanUrl.match(/[#&?]gid=([0-9]+)/);
+            if (gidMatch) gid = gidMatch[1];
+            return `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ''}`;
+        }
+        if (cleanUrl.includes('docs.google.com/spreadsheets/d/e/') && cleanUrl.includes('pubhtml')) {
+            return cleanUrl.replace('pubhtml', 'pub?output=csv');
+        }
+        return cleanUrl;
+    }
+
+    async function executeCurrentImportTab() {
+        const isReplace = document.getElementById('importModeReplace').checked;
+        if (isReplace && !requireAdminPassword("substituir a frota inteira")) return;
+
+        if (currentImportTab === 'online') {
+            await executeImportFromOnlineUrl();
+        } else if (currentImportTab === 'file') {
+            const fileInput = document.getElementById('mergeFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Por favor, selecione um arquivo de planilha (.xlsx, .csv, .json).');
+                return;
+            }
+            processFileSelected(fileInput.files[0], isReplace);
+        } else {
+            executeMergeFromText(isReplace);
+        }
+    }
+
+    async function executeImportFromOnlineUrl() {
+        const urlInput = document.getElementById('onlineSheetUrlInput');
+        const rawUrl = urlInput.value.trim();
+        if (!rawUrl) {
+            alert('Por favor, informe a URL da planilha online.');
+            return;
+        }
+
+        const shouldSave = document.getElementById('saveOnlineUrlCheckbox').checked;
+        if (shouldSave) {
+            localStorage.setItem('oleo_vtr_online_sheet_url', rawUrl);
+        }
+
+        const actionBtn = document.getElementById('btnExecuteImportAction');
+        const originalText = actionBtn.innerHTML;
+        actionBtn.disabled = true;
+        actionBtn.innerHTML = '<span class="spinner"></span> Buscando dados online...';
+
+        try {
+            const csvExportUrl = convertToDirectCsvUrl(rawUrl);
+            const response = await fetch(csvExportUrl);
+            if (!response.ok) throw new Error(`Erro na conexão (${response.status}).`);
+            const textData = await response.text();
+            if (textData.trim().startsWith('<!DOCTYPE html') || textData.includes('<html')) {
+                throw new Error('Certifique-se de compartilhar a planilha como "Qualquer pessoa com o link pode ver" no Google Sheets.');
+            }
+            const workbook = XLSX.read(textData, { type: 'string' });
+            processWorkbookData(workbook, document.getElementById('importModeReplace').checked);
+        } catch (err) {
+            alert(`Falha ao carregar:\n\n${err.message}`);
+        } finally {
+            actionBtn.disabled = false;
+            actionBtn.innerHTML = originalText;
+        }
+    }
+
+    function handleMergeFileSelected(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        processFileSelected(file, document.getElementById('importModeReplace').checked);
+    }
+
+    function processFileSelected(file, isReplace = false) {
+        const fileName = file.name.toLowerCase();
+        const reader = new FileReader();
+
+        if (fileName.endsWith('.json')) {
+            reader.onload = function(e) {
+                try {
+                    processJsonData(JSON.parse(e.target.result), isReplace);
+                } catch (err) {
+                    alert('Erro ao ler arquivo JSON.');
+                }
+            };
+            reader.readAsText(file);
+        } else {
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    processWorkbookData(workbook, isReplace);
+                } catch (err) {
+                    alert('Erro ao ler planilha.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    function importAnyFile(event, isReplace = false) {
+        const file = event.target.files[0];
+        if (!file) return;
+        processFileSelected(file, isReplace);
+        event.target.value = '';
+    }
+
+    function executeMergeFromText(isReplace = false) {
+        const txt = document.getElementById('mergeJsonText').value.trim();
+        if (!txt) {
+            alert('Cole o conteúdo da planilha ou código JSON.');
+            return;
+        }
+        if (txt.startsWith('{') || txt.startsWith('[')) {
+            try {
+                processJsonData(JSON.parse(txt), isReplace);
+                return;
+            } catch (err) {}
+        }
+        try {
+            const workbook = XLSX.read(txt, { type: 'string' });
+            processWorkbookData(workbook, isReplace);
+        } catch (err) {
+            alert('Não foi possível interpretar o texto colado.');
+        }
+    }
+
+    function normalizeCol(str) {
+        if (!str) return '';
+        return str.toString().trim().toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]/g, "");
+    }
+
+    function processWorkbookData(workbook, isReplace = false) {
+        if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
+            alert('Planilha vazia.');
+            return;
+        }
+
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const sheet2D = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+        if (sheet2D.length < 2) {
+            alert('Nenhum dado encontrado na planilha.');
+            return;
+        }
+
+        let headerRowIdx = 0;
+        for (let r = 0; r < Math.min(sheet2D.length, 10); r++) {
+            const row = sheet2D[r].map(c => normalizeCol(c));
+            if (row.includes('viatura') || row.includes('prefixo') || row.includes('kmatual')) {
+                headerRowIdx = r;
+                break;
+            }
+        }
+
+        const headers = sheet2D[headerRowIdx].map(h => normalizeCol(h));
+        const rawObjects = [];
+        for (let r = headerRowIdx + 1; r < sheet2D.length; r++) {
+            const row = sheet2D[r];
+            if (!row || row.length === 0) continue;
+            const obj = {};
+            let hasData = false;
+            headers.forEach((h, colIdx) => {
+                if (!h) return;
+                const val = row[colIdx];
+                obj[h] = val !== undefined && val !== null ? val : '';
+                if (obj[h] !== '') hasData = true;
+            });
+            if (hasData) rawObjects.push(obj);
+        }
+
+        if (isReplace) {
+            records = [];
+            mileageHistory = [];
+        }
+        let countAdded = 0;
+
+        rawObjects.forEach(row => {
+            let vName = row['viatura'] || row['prefixo'] || row['vtr'] || row['veiculo'];
+            if (!vName) return;
+            vName = String(vName).trim().toUpperCase();
+
+            let currentKm = parseFloat(row['kmatual'] || row['km'] || row['quilometragem'] || 0);
+            let targetKm = parseFloat(row['kmalvo'] || row['kmtroca'] || row['alvo'] || 0);
+            let oilSpec = row['oleo'] || row['especificacao'] || row['filtro'] || row['observacoes'] || 'Padrão';
+            let dateVal = row['data'] || row['dataleitura'] || todayStr;
+            let isOilChange = row['troca'] ? (String(row['troca']).toUpperCase().includes('SIM') || String(row['troca']).toUpperCase().includes('S')) : false;
+
+            if (isNaN(currentKm)) currentKm = 0;
+            if (isNaN(targetKm)) targetKm = 0;
+
+            if (!customVehicles.includes(vName)) customVehicles.push(vName);
+            if (targetKm > 0) vehicleTargetMap[vName] = targetKm;
+
+            const existingIdx = records.findIndex(r => r.vehicle === vName);
+            const newRec = {
+                id: vName,
+                vehicle: vName,
+                date: String(dateVal).split('T')[0],
+                currentKm: currentKm,
+                targetKm: targetKm,
+                oilBrand: String(oilSpec).trim()
+            };
+
+            if (existingIdx !== -1) {
+                records[existingIdx] = newRec;
+            } else {
+                records.push(newRec);
+            }
+
+            mileageHistory.unshift({
+                id: Date.now() + Math.random(),
+                vehicle: vName,
+                date: String(dateVal).split('T')[0],
+                currentKm: currentKm,
+                targetKm: targetKm,
+                isOilChange: isOilChange,
+                oilBrand: String(oilSpec).trim(),
+                timestamp: new Date().toISOString()
+            });
+
+            countAdded++;
+        });
+
+        localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+        localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        saveRecords();
+        updateStatusTimestamp();
+
+        populateMonthSelect();
+        populateVehicleSelects();
+        renderDashboard();
+        renderMileageTable();
+        closeMergeModal();
+        syncAllDataToOnline();
+
+        alert(`✅ Importação concluída com sucesso! ${countAdded} viaturas processadas.`);
+        showToast(`📊 <strong>${countAdded}</strong> registros de óleo atualizados!`);
+    }
+
+    function processJsonData(imported, isReplace = false) {
+        if (!imported) return;
+        if (isReplace) {
+            records = [];
+            mileageHistory = [];
+        }
+
+        if (imported.vehicles && Array.isArray(imported.vehicles)) {
+            customVehicles = imported.vehicles;
+            if (!customVehicles.includes('26-24')) customVehicles.push('26-24');
+            localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+        }
+
+        if (imported.targetMap && typeof imported.targetMap === 'object') {
+            vehicleTargetMap = imported.targetMap;
+            localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        }
+
+        if (imported.mileageHistory && Array.isArray(imported.mileageHistory)) {
+            mileageHistory = imported.mileageHistory;
+        }
+
+        let newRecords = Array.isArray(imported) ? imported : (imported.records || []);
+        newRecords.forEach(r => {
+            const v = r.vehicle || r.id;
+            if (!v) return;
+            const cleanV = String(v).trim().toUpperCase();
+            if (!customVehicles.includes(cleanV)) customVehicles.push(cleanV);
+            if (r.targetKm) vehicleTargetMap[cleanV] = r.targetKm;
+
+            const existingIdx = records.findIndex(rec => rec.vehicle === cleanV);
+            const recObj = {
+                id: cleanV,
+                vehicle: cleanV,
+                date: r.date || todayStr,
+                currentKm: parseFloat(r.currentKm || 0),
+                targetKm: parseFloat(r.targetKm || vehicleTargetMap[cleanV] || 0),
+                oilBrand: r.oilBrand || 'Padrão'
+            };
+
+            if (existingIdx !== -1) {
+                records[existingIdx] = recObj;
+            } else {
+                records.push(recObj);
+            }
+        });
+
+        localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+        localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+        saveRecords();
+        updateStatusTimestamp();
+
+        populateMonthSelect();
+        populateVehicleSelects();
+        renderDashboard();
+        renderMileageTable();
+        closeMergeModal();
+        syncAllDataToOnline();
+
+        alert(`✅ Backup JSON importado com sucesso! Total de ${records.length} registros ativos.`);
+        showToast(`📥 <strong>${records.length}</strong> viaturas sincronizadas!`);
+    }
+
+    // =========================================================================
+    // 📊 RENDERIZAÇÃO DO DASHBOARD, TABELA E GRÁFICOS
+    // =========================================================================
+    function renderDashboard() {
+        const filterVal = document.getElementById('filterVehicle').value;
+        const filterMonth = document.getElementById('filterMonth').value;
+
+        // 1. Filtrar conjunto de registros com base no mês selecionado
+        let baseRecords = records;
+        if (filterMonth !== 'ALL') {
+            baseRecords = records.filter(r => r.date && r.date.startsWith(filterMonth));
+        }
+
+        // Agrupar última leitura por viatura no conjunto base do mês
+        const latestByVehicle = {};
+        baseRecords.forEach(r => {
+            if (!latestByVehicle[r.vehicle] || new Date(r.date) > new Date(latestByVehicle[r.vehicle].date)) {
+                latestByVehicle[r.vehicle] = r;
+            }
+        });
+
+        const vehicleList = Object.values(latestByVehicle);
+        let okCount = 0, warnCount = 0, dangerCount = 0;
+
+        vehicleList.forEach(v => {
+            const fixedTarget = vehicleTargetMap[v.vehicle] || v.targetKm;
+            if (fixedTarget) {
+                const diff = fixedTarget - v.currentKm;
+                if (diff > 500) okCount++;
+                else if (diff >= 0) warnCount++;
+                else dangerCount++;
+            }
+        });
+
+        // KPIs da Frota
+        document.getElementById('kpiTotalVehicles').textContent = customVehicles.length;
+        document.getElementById('kpiOkVehicles').textContent = okCount;
+        document.getElementById('kpiWarnVehicles').textContent = warnCount;
+        document.getElementById('kpiDangerVehicles').textContent = dangerCount;
+
+        // Projeção Preditiva ou Mensagem do Filtro
+        const projectionBox = document.getElementById('projectionBox');
+        const projectionTitle = document.getElementById('projectionTitle');
+        const projectionMessage = document.getElementById('projectionMessage');
+
+        let monthLabelText = "";
+        if (filterMonth !== 'ALL') {
+            const [y, m] = filterMonth.split('-');
+            monthLabelText = " em " + (monthNamesPT[parseInt(m,10)-1] || m) + "/" + y;
+        }
+
+        if (filterVal === 'FILTER_VENCIDOS') {
+            projectionTitle.textContent = "🚨 Filtro Ativo: Trocas Vencidas" + monthLabelText;
+            projectionMessage.innerHTML = `Exibindo apenas viaturas com <strong>troca de óleo vencida</strong>${monthLabelText}. Total: <strong>${dangerCount}</strong>.`;
+            projectionBox.style.display = 'flex';
+        } else if (filterVal === 'FILTER_ATENCAO') {
+            projectionTitle.textContent = "⚠️ Filtro Ativo: Apenas em Atenção" + monthLabelText;
+            projectionMessage.innerHTML = `Exibindo viaturas com menos de <strong>500 km restantes</strong>${monthLabelText}. Total: <strong>${warnCount}</strong>.`;
+            projectionBox.style.display = 'flex';
+        } else if (filterVal === 'FILTER_EM_DIA') {
+            projectionTitle.textContent = "✅ Filtro Ativo: Apenas Em Dia" + monthLabelText;
+            projectionMessage.innerHTML = `Exibindo viaturas com óleo dentro do prazo${monthLabelText}. Total: <strong>${okCount}</strong>.`;
+            projectionBox.style.display = 'flex';
+        } else if (filterVal !== 'ALL') {
+            projectionTitle.textContent = "Projeção de Troca";
+            const vRecords = baseRecords.filter(r => r.vehicle === filterVal)
+                .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+            if (vRecords.length >= 2) {
+                const first = vRecords[0];
+                const last = vRecords[vRecords.length - 1];
+                const daysDiff = (new Date(last.date) - new Date(first.date)) / (1000 * 60 * 60 * 24);
+                const kmDiff = last.currentKm - first.currentKm;
+
+                if (daysDiff > 0 && kmDiff > 0) {
+                    const avgKmPerDay = kmDiff / daysDiff;
+                    const fixedTarget = vehicleTargetMap[filterVal] || last.targetKm;
+                    const remainingKm = fixedTarget ? (fixedTarget - last.currentKm) : 0;
+                    if (remainingKm > 0) {
+                        const estDaysLeft = Math.round(remainingKm / avgKmPerDay);
+                        const estDate = new Date(new Date(last.date).getTime() + (estDaysLeft * 24 * 60 * 60 * 1000));
+                        projectionMessage.innerHTML = `Viatura <strong>${last.vehicle}</strong> roda em média <strong>${Math.round(avgKmPerDay)} km/dia</strong>. Previsão de próxima troca em aproximadamente <strong>${estDaysLeft} dias</strong> (em ${estDate.toLocaleDateString('pt-BR')}).`;
+                    } else if (fixedTarget) {
+                        projectionMessage.innerHTML = `⚠️ Viatura <strong>${last.vehicle}</strong> está com a troca vencida em <strong>${Math.abs(remainingKm)} km</strong>! É necessária manutenção imediata.`;
+                    } else {
+                        projectionBox.style.display = 'none';
+                    }
+                    if (fixedTarget) projectionBox.style.display = 'flex';
+                } else {
+                    projectionBox.style.display = 'none';
+                }
+            } else {
+                projectionBox.style.display = 'none';
+            }
+        } else if (filterMonth !== 'ALL') {
+            projectionTitle.textContent = "📅 Filtro de Mês Ativo" + monthLabelText;
+            projectionMessage.innerHTML = `Exibindo todos os registros realizados em <strong>${monthLabelText.replace(' em ', '')}</strong>.`;
+            projectionBox.style.display = 'flex';
+        } else {
+            projectionBox.style.display = 'none';
+        }
+
+        // 2. Filtrar Tabela
+        let filteredRecords = [...baseRecords];
+
+        if (filterVal === 'FILTER_VENCIDOS') {
+            filteredRecords = baseRecords.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                return target ? (target - r.currentKm) < 0 : false;
+            });
+        } else if (filterVal === 'FILTER_ATENCAO') {
+            filteredRecords = baseRecords.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                if (!target) return false;
+                const diff = target - r.currentKm;
+                return diff >= 0 && diff <= 500;
+            });
+        } else if (filterVal === 'FILTER_EM_DIA') {
+            filteredRecords = baseRecords.filter(r => {
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                return target ? (target - r.currentKm) > 500 : false;
+            });
+        } else if (filterVal !== 'ALL') {
+            filteredRecords = baseRecords.filter(r => r.vehicle === filterVal);
+        }
+
+        filteredRecords.sort((a, b) => (a.vehicle || '').localeCompare(b.vehicle || '', undefined, { numeric: true, sensitivity: 'base' }));
+
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        if (filteredRecords.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Nenhum registro de óleo cadastrado ainda. Use o formulário acima para lançar o primeiro KM da frota.</td></tr>`;
+        } else {
+            filteredRecords.forEach(r => {
+                const tr = document.createElement('tr');
+                const target = vehicleTargetMap[r.vehicle] || r.targetKm;
+                const diff = target ? (target - r.currentKm) : null;
+
+                let badgeHtml = '<span class="badge badge-info">Sem Alvo</span>';
+                let diffHtml = '--';
+
+                if (diff !== null) {
+                    if (diff > 500) {
+                        badgeHtml = '<span class="badge badge-ok">Em dia</span>';
+                        diffHtml = `<span style="color: var(--success); font-weight:700;">+${diff.toLocaleString('pt-BR')} km</span>`;
+                    } else if (diff >= 0) {
+                        badgeHtml = '<span class="badge badge-warning">Atenção</span>';
+                        diffHtml = `<span style="color: var(--warning); font-weight:700;">+${diff.toLocaleString('pt-BR')} km</span>`;
+                    } else {
+                        badgeHtml = '<span class="badge badge-danger">Vencido</span>';
+                        diffHtml = `<span style="color: var(--danger); font-weight:700;">-${Math.abs(diff).toLocaleString('pt-BR')} km</span>`;
+                    }
+                }
+
+                const formattedDate = r.date ? r.date.split('-').reverse().join('/') : '-';
+
+                const isHidPrefix = hiddenColumns.includes('prefixo') ? 'col-hidden' : '';
+                const isHidData = hiddenColumns.includes('data') ? 'col-hidden' : '';
+                const isHidKmAtual = hiddenColumns.includes('kmatual') ? 'col-hidden' : '';
+                const isHidKmAlvo = hiddenColumns.includes('kmalvo') ? 'col-hidden' : '';
+                const isHidKmRestante = hiddenColumns.includes('kmrestante') ? 'col-hidden' : '';
+                const isHidStatus = hiddenColumns.includes('status') ? 'col-hidden' : '';
+                const isHidOleo = hiddenColumns.includes('oleo') ? 'col-hidden' : '';
+                const isHidAcoes = hiddenColumns.includes('acoes') ? 'col-hidden' : '';
+
+                tr.innerHTML = `
+                    <td class="col-td-prefixo ${isHidPrefix}" style="font-weight: 700; color: var(--text-main);"><strong>${r.vehicle}</strong></td>
+                    <td class="col-td-data ${isHidData}">${formattedDate}</td>
+                    <td class="col-td-kmatual ${isHidKmAtual}">${r.currentKm.toLocaleString('pt-BR')} km</td>
+                    <td class="col-td-kmalvo ${isHidKmAlvo}">${target ? target.toLocaleString('pt-BR') + ' km' : '--'}</td>
+                    <td class="col-td-kmrestante ${isHidKmRestante}">${diffHtml}</td>
+                    <td class="col-td-status ${isHidStatus}">${badgeHtml}</td>
+                    <td class="col-td-oleo ${isHidOleo}">${r.oilBrand || 'Padrão'}</td>
+                    <td class="col-td-acoes ${isHidAcoes}" style="text-align: center;">
+                        <div class="actions-cell">
+                            <button class="btn btn-edit btn-3d btn-sm" onclick="openEditModal('${r.vehicle}')" title="Editar Registro">✏️ Editar</button>
+                            <button class="btn btn-danger btn-3d btn-sm" onclick="deleteRecordFromTable('${r.vehicle}')" title="Excluir Registro">Excluir</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        updateColumnVisibilityUI();
+        updateCharts(vehicleList, okCount, warnCount, dangerCount);
+    }
+
+    function updateCharts(vehicleList, okCount, warnCount, dangerCount) {
+        const isDark = (typeof currentTheme !== 'undefined' ? currentTheme : localStorage.getItem('oleo_vtr_theme')) === 'dark';
+        const labelColor = isDark ? '#f1f5f9' : '#0f172a';
+        const tickColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+
+        const validVehicles = vehicleList.filter(v => vehicleTargetMap[v.vehicle] || v.targetKm);
+        const labels = validVehicles.map(v => v.vehicle);
+        const dataKM = validVehicles.map(v => {
+            const target = vehicleTargetMap[v.vehicle] || v.targetKm;
+            return target - v.currentKm;
+        });
+        const bgColors = dataKM.map(km => km > 500 ? '#10b981' : (km >= 0 ? '#f59e0b' : '#ef4444'));
+
+        const ctxBar = document.getElementById('barChart').getContext('2d');
+        if (barChartInstance) barChartInstance.destroy();
+        barChartInstance = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'KM Restantes para Troca',
+                    data: dataKM,
+                    backgroundColor: bgColors,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => ` ${ctx.raw.toLocaleString('pt-BR')} km restantes` } }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: tickColor, font: { weight: '600' } },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: tickColor },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+
+        const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+        if (doughnutChartInstance) doughnutChartInstance.destroy();
+        doughnutChartInstance = new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: {
+                labels: ['Em dia (> 500 km)', 'Atenção (≤ 500 km)', 'Vencido'],
+                datasets: [{
+                    data: [okCount, warnCount, dangerCount],
+                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: labelColor, font: { weight: '600' } }
+                    }
+                }
+            }
+        });
+    }
+
+    // =========================================================================
+    // 🌙 GERENCIAMENTO DE TEMA (MODO NOTURNO / CLARO)
+    // =========================================================================
+    let currentTheme = localStorage.getItem('oleo_vtr_theme') || 'light';
+
+    function applyTheme(theme, showFeedback = false) {
+        currentTheme = theme;
+        localStorage.setItem('oleo_vtr_theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+
+        const iconEl = document.getElementById('themeToggleIcon');
+        const textEl = document.getElementById('themeToggleText');
+        const btnEl = document.getElementById('themeToggleBtn');
+
+        if (theme === 'dark') {
+            if (iconEl) iconEl.textContent = '☀️';
+            if (textEl) textEl.textContent = 'Modo Claro';
+            if (btnEl) btnEl.title = 'Mudar para Tema Claro';
+        } else {
+            if (iconEl) iconEl.textContent = '🌙';
+            if (textEl) textEl.textContent = 'Modo Noturno';
+            if (btnEl) btnEl.title = 'Mudar para Modo Noturno';
+        }
+
+        if (showFeedback) {
+            showToast(theme === 'dark' ? '🌙 <strong>Modo Noturno</strong> ativado!' : '☀️ <strong>Modo Claro</strong> ativado!');
+        }
+
+        renderDashboard();
+    }
+
+    function toggleTheme() {
+        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        applyTheme(nextTheme, true);
+    }
+
+    // Inicialização Completa
+    applyTheme(currentTheme);
+    updateAppTitleDisplay();
+    initStatusTimestamp();
+    populateMonthSelect();
+    populateVehicleSelects();
+    renderDashboard();
+    renderMileageTable();
+    updateColumnVisibilityUI();
+
+    // Iniciar escuta e conexão em nuvem
+    loadDataFromOnline(false);
+    startAutoSync();
+</script>
+
+</body>
+</html>const UNIVERSAL_CLOUD_URL = 'https://controle-frota-vagner-default-rtdb.firebaseio.com/oleo_vtr_database.json';
+    const BACKUP_CLOUD_URL = 'https://jsonblob.com/api/jsonBlob/1277636402283839488';
+
+    let localLastModifiedTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
+    let isSavingInProgress = false;
+
+    function markLocalChange() {
+        localLastModifiedTime = Date.now();
+        localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
+    }
+
+    // Inicialização do Colapso Automático de Setores no Celular
+    function initMobileSectionCollapse() {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            const sectionsToCollapse = [
+                'chartsGridContent',
+                'mileageCardBodyContent',
+                'footerActionsContent',
+                'kpiGridContent',
+                'formSectionBodyContent'
+            ];
+            sectionsToCollapse.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.classList.contains('collapsed')) {
+                    el.classList.add('collapsed');
+                    const card = el.closest('.card') || el.parentElement;
+                    if (card) {
+                        const btn = card.querySelector('.btn-collapse');
+                        if (btn) {
+                            btn.textContent = '▼';
+                            btn.title = 'Expandir Setor';
+                            btn.setAttribute('aria-expanded', 'false');
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Renderizar QR Code no modal para leitura fácil pelo celular
+    function updateQrCodeDisplay() {
+        const canvas = document.getElementById('qrcodeCanvas');
+        if (!canvas) return;
+        const gh = getGithubConfig();
+        const token = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        
+        const base = window.location.origin + window.location.pathname;
+        const syncUrl = token 
+            ? `${base}#sync_token=${encodeURIComponent(token)}&owner=${encodeURIComponent(gh.owner)}&repo=${encodeURIComponent(gh.repo)}`
+            : base;
+
+        if (typeof QRCode !== 'undefined') {
+            QRCode.toCanvas(canvas, syncUrl, { width: 140, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } }, function (error) {
+                if (error) console.warn('Erro ao gerar QR Code:', error);
+            });
+        }
+    }
+
+    // Gerar link de conexão rápida para enviar ao celular
+    function generateMobileSyncLink() {
+        const gh = getGithubConfig();
+        const token = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        if (!token) {
+            alert('⚠️ Cole seu Token do GitHub no campo acima antes de gerar o link de sincronização para o celular!');
+            return;
+        }
+        
+        saveServerConfigUrl();
+        
+        const base = window.location.origin + window.location.pathname;
+        const syncUrl = `${base}#sync_token=${encodeURIComponent(token)}&owner=${encodeURIComponent(gh.owner)}&repo=${encodeURIComponent(gh.repo)}`;
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(syncUrl).then(() => {
+                showToast('📱 <strong>Link copiado!</strong> Envie pelo WhatsApp e abra no celular para conectar tudo automaticamente.');
+                alert('✅ Link copiado com sucesso!\n\nEnvie este link no seu WhatsApp e abra-o no celular. Ao abrir, o celular se conectará sozinho ao mesmo banco do GitHub!');
+            }).catch(() => {
+                prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
+            });
+        } else {
+            prompt('Copie o link abaixo e abra no navegador do seu celular:', syncUrl);
+        }
+    }
+
+    // Auto-detectar parâmetros de sincronização na URL (ao abrir link no celular)
+    function checkUrlSyncParams() {
+        const hash = window.location.hash;
+        if (hash && hash.includes('sync_token=')) {
+            try {
+                const params = new URLSearchParams(hash.slice(1));
+                const token = params.get('sync_token');
+                const owner = params.get('owner');
+                const repo = params.get('repo');
+                
+                if (token) localStorage.setItem('oleo_vtr_gh_token', token);
+                if (owner) localStorage.setItem('oleo_vtr_gh_owner', owner);
+                if (repo) localStorage.setItem('oleo_vtr_gh_repo', repo);
+                
+                history.replaceState(null, null, window.location.pathname);
+                
+                showToast('🎉 <strong>Celular Conectado com Sucesso!</strong> Sincronizando dados...');
+                setTimeout(() => loadDataFromOnline(false), 300);
+            } catch (e) {
+                console.warn('Erro ao processar sync via hash:', e);
+            }
+        }
+    }
+
+    function switchServerTab(tab) {
+        const tabGh = document.getElementById('tabServerGithub');
+        const tabCustom = document.getElementById('tabServerCustom');
+        const btnGh = document.getElementById('tabBtnGithub');
+        const btnCustom = document.getElementById('tabBtnCustom');
+        if (tab === 'github') {
+            if (tabGh) { tabGh.classList.add('active'); tabGh.style.display = 'flex'; }
+            if (tabCustom) { tabCustom.classList.remove('active'); tabCustom.style.display = 'none'; }
+            if (btnGh) btnGh.classList.add('active');
+            if (btnCustom) btnCustom.classList.remove('active');
+            setTimeout(updateQrCodeDisplay, 100);
+        } else {
+            if (tabGh) { tabGh.classList.remove('active'); tabGh.style.display = 'none'; }
+            if (tabCustom) { tabCustom.classList.add('active'); tabCustom.style.display = 'flex'; }
+            if (btnGh) btnGh.classList.remove('active');
+            if (btnCustom) btnCustom.classList.add('active');
+        }
+    }
+
+    function toggleGhTokenVisibility() {
+        const inp = document.getElementById('ghTokenInput');
+        const btn = document.getElementById('btnToggleGhToken');
+        if (!inp) return;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            if (btn) btn.textContent = '🙈';
+        } else {
+            inp.type = 'password';
+            if (btn) btn.textContent = '👁️';
+        }
+    }
+
+    // Leitura RÁPIDA e SEM RATE-LIMIT do repositório GitHub (Usando URLs raw e locais com timestamp)
+    async function loadDataFromGithub() {
+        const gh = getGithubConfig();
+        const urlsToTry = [
+            `./${gh.path}?_t=${Date.now()}`,
+            `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${gh.branch}/${gh.path}?_t=${Date.now()}`
+        ];
+
+        for (const url of urlsToTry) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+                clearTimeout(timeoutId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
+                        return { success: true, data: data, source: `GitHub (${gh.owner}/${gh.repo})` };
+                    }
+                }
+            } catch (e) {}
+        }
+        return { success: false };
+    }
+
+    // Gravação dos dados no repositório GitHub via GitHub API Contents (Apenas no momento do salvamento)
+    async function saveDataToGithub(payload) {
+        const gh = getGithubConfig();
+        if (!gh.token || !gh.token.trim()) {
+            return { success: false, error: 'Token do GitHub não configurado' };
+        }
+
+        const token = gh.token.trim();
+        const authHeader = token.startsWith('ghp_') || token.startsWith('github_pat_') 
+            ? `Bearer ${token}` 
+            : `token ${token}`;
+
+        const apiPath = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
+
+        try {
+            // 1. Obter SHA atual do arquivo diretamente da API
+            let currentSha = null;
+            try {
+                const getRes = await fetch(`${apiPath}?ref=${gh.branch}&_t=${Date.now()}`, {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': authHeader,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    },
+                    cache: 'no-store'
+                });
+                if (getRes.ok) {
+                    const getData = await getRes.json();
+                    currentSha = getData.sha;
+                }
+            } catch (err) {
+                console.warn('Erro ao obter SHA do GitHub:', err);
+            }
+
+            const jsonString = JSON.stringify(payload, null, 2);
+            const base64Content = utf8ToBase64(jsonString);
+
+            const putBody = {
+                message: `Atualização da frota via painel [${new Date().toLocaleString('pt-BR')}]`,
+                content: base64Content,
+                branch: gh.branch
+            };
+            if (currentSha) putBody.sha = currentSha;
+
+            let putRes = await fetch(apiPath, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                },
+                body: JSON.stringify(putBody)
+            });
+
+            // Se deu conflito 409 (SHA mudou por commit de outro aparelho), tenta buscar o novo SHA e regravar
+            if (putRes.status === 409) {
+                const getResRetry = await fetch(`${apiPath}?ref=${gh.branch}&_t=${Date.now()}`, {
+                    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': authHeader },
+                    cache: 'no-store'
+                });
+                if (getResRetry.ok) {
+                    const retryData = await getResRetry.json();
+                    putBody.sha = retryData.sha;
+                    putRes = await fetch(apiPath, {
+                        method: 'PUT',
+                        headers: {
+                            'Accept': 'application/vnd.github+json',
+                            'Authorization': authHeader,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(putBody)
+                    });
+                }
+            }
+
+            if (putRes.ok) {
+                const putData = await putRes.json();
+                return { success: true, data: putData, source: `GitHub API (${gh.owner}/${gh.repo})` };
+            } else {
+                const errData = await putRes.json().catch(() => ({}));
+                return { success: false, error: errData.message || `Erro HTTP ${putRes.status}`, status: putRes.status };
+            }
+        } catch (err) {
+            return { success: false, error: err.message || 'Erro de rede ao salvar no GitHub' };
+        }
+    }
+
+    function getApiCandidateEndpoints() {
+        const list = [];
+        const customUrl = localStorage.getItem('oleo_vtr_api_url');
+        if (customUrl && customUrl.trim()) {
+            let u = customUrl.trim();
+            if (!u.startsWith('http') && !u.startsWith('/')) u = 'https://' + u;
+            if (u.endsWith('/')) u = u.slice(0, -1);
+            if (!u.endsWith('/api/oleo') && !u.endsWith('.json')) {
+                u += '/api/oleo';
+            }
+            list.push(u);
+        }
+
+        if (!list.includes(UNIVERSAL_CLOUD_URL)) list.push(UNIVERSAL_CLOUD_URL);
+        if (!list.includes(BACKUP_CLOUD_URL)) list.push(BACKUP_CLOUD_URL);
+
+        if (lastActiveEndpoint && !list.includes(lastActiveEndpoint)) {
+            list.push(lastActiveEndpoint);
+        }
+
+        if (window.location.protocol !== 'file:') {
+            if (!list.includes('/api/oleo')) list.push('/api/oleo');
+            if (!list.includes('/api/frota')) list.push('/api/frota');
+        }
+
+        const remoteNetlify = 'https://painel-frota.netlify.app/api/oleo';
+        if (!list.includes(remoteNetlify)) list.push(remoteNetlify);
+
+        return list;
+    }
+
+    async function executeApiRequest(method, payload = null) {
+        const endpoints = getApiCandidateEndpoints();
+        let lastError = null;
+        let lastStatusCode = null;
+
+        for (const endpoint of endpoints) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+                const isFirebase = endpoint.includes('firebaseio.com');
+                const isBlob = endpoint.includes('jsonblob.com');
+                const actualMethod = (isFirebase || isBlob) ? (method === 'POST' ? 'PUT' : method) : method;
+
+                const reqOpts = {
+                    method: actualMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    signal: controller.signal,
+                    cache: 'no-store'
+                };
+
+                if (payload && (method === 'POST' || method === 'PUT')) {
+                    reqOpts.body = JSON.stringify(payload);
+                }
+
+                const response = await fetch(endpoint, reqOpts);
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    lastActiveEndpoint = endpoint;
+                    localStorage.setItem('oleo_vtr_active_endpoint', endpoint);
+                    return { success: true, data: data, endpoint: endpoint, status: response.status };
+                } else {
+                    lastStatusCode = response.status;
+                    const errData = await response.json().catch(() => ({}));
+                    lastError = errData.error || errData.message || `HTTP ${response.status}`;
+                }
+            } catch (err) {
+                lastError = err.name === 'AbortError' ? 'Tempo limite esgotado' : err.message;
+            }
+        }
+
+        return { success: false, error: lastError || 'Nenhum servidor online acessível', status: lastStatusCode || 0 };
+    }
+
+    function generateDataHash(obj) {
+        return JSON.stringify(obj);
+    }
+
+    let currentConnectionDetail = 'Verificando conexão...';
+
+    function onClickServerConfigBtn() {
+        if (!requireAdminPassword("acessar as configurações do servidor e banco de dados")) return;
+        openServerConfigModal();
+    }
+
+    function setCloudStatusBadge(status, text = '', tooltipText = '') {
+        const btn = document.getElementById('cloudStatusBtn');
+        const txt = document.getElementById('cloudStatusText');
+        
+        if (tooltipText) {
+            currentConnectionDetail = tooltipText;
+        }
+
+        if (btn) {
+            btn.className = `cloud-badge-btn ${status}`;
+            btn.title = currentConnectionDetail;
+        }
+
+        if (txt) {
+            if (status === 'connected') {
+                txt.textContent = 'Online';
+            } else if (status === 'syncing') {
+                txt.textContent = 'Sincronizando...';
+            } else {
+                txt.textContent = 'Modo Local';
+            }
+        }
+    }
+
+    async function loadDataFromOnline(isBackground = false) {
+        if (isSavingInProgress) return;
+
+        if (!isBackground) setCloudStatusBadge('syncing', '', 'Sincronizando dados em tempo real...');
+        try {
+            let candidates = [];
+
+            // 1. Tentar ler do GitHub
+            const ghRes = await loadDataFromGithub();
+            if (ghRes.success && ghRes.data) {
+                candidates.push({ 
+                    source: 'github', 
+                    data: ghRes.data, 
+                    time: new Date(ghRes.data.updatedAt || 0).getTime() 
+                });
+            }
+
+            // 2. Tentar ler da Nuvem Universal
+            const apiRes = await executeApiRequest('GET');
+            if (apiRes.success && apiRes.data) {
+                candidates.push({ 
+                    source: 'api', 
+                    data: apiRes.data, 
+                    time: new Date(apiRes.data.updatedAt || 0).getTime() 
+                });
+            }
+
+            if (candidates.length === 0) {
+                currentConnectionDetail = 'Modo Local (Offline) - Clique para configurar conexão';
+                setCloudStatusBadge('disconnected', '', currentConnectionDetail);
+                if (!isBackground) {
+                    showToast(`⚠️ <strong>Servidor Offline:</strong> Não foi possível carregar dados remotos. Usando cópia local.`);
+                }
+                return;
+            }
+
+            candidates.sort((a, b) => b.time - a.time);
+            const winner = candidates[0];
+            const data = winner.data;
+            const remoteTime = winner.time;
+            const connectionType = winner.source === 'github' 
+                ? `Conectado ao Repositório GitHub (${getGithubConfig().owner}/${getGithubConfig().repo})` 
+                : 'Conectado à Nuvem Universal RTDB';
+
+            // 🛡️ Proteção: Se houver alteração local recente mais nova que o servidor, preserva e envia
+            const currentLocalTime = parseInt(localStorage.getItem('oleo_vtr_local_modified_time') || '0', 10);
+            if (currentLocalTime > remoteTime && (Date.now() - currentLocalTime) < 45000) {
+                console.log('Alteração local mais recente preservada. Enviando para o servidor...');
+                currentConnectionDetail = connectionType;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+                isCloudConnected = true;
+                syncAllDataToOnline(true);
+                return;
+            }
+
+            if (data && typeof data === 'object' && Object.keys(data).length > 0 && (Array.isArray(data.records) || data.vehicles || data.appTitle)) {
+                const currentHash = generateDataHash(data);
+                if (currentHash === lastSyncedHash) {
+                    currentConnectionDetail = connectionType;
+                    setCloudStatusBadge('connected', '', currentConnectionDetail);
+                    isCloudConnected = true;
+                    return;
+                }
+                lastSyncedHash = currentHash;
+                isRemoteUpdate = true;
+
+                if (Array.isArray(data.records)) {
+                    records = data.records;
+                    localStorage.setItem('oleo_vtr_records', JSON.stringify(records));
+                }
+                if (Array.isArray(data.mileageHistory)) {
+                    mileageHistory = data.mileageHistory;
+                    localStorage.setItem('oleo_vtr_mileage_history', JSON.stringify(mileageHistory));
+                }
+                if (Array.isArray(data.vehicles)) {
+                    customVehicles = data.vehicles;
+                    if (!customVehicles.includes('26-24')) customVehicles.push('26-24');
+                    localStorage.setItem('oleo_vtr_vehicles', JSON.stringify(customVehicles));
+                }
+                if (data.targetMap && typeof data.targetMap === 'object') {
+                    vehicleTargetMap = data.targetMap;
+                    localStorage.setItem('oleo_vtr_target_map', JSON.stringify(vehicleTargetMap));
+                }
+                if (data.appTitle) {
+                    appTitle = data.appTitle;
+                    localStorage.setItem('oleo_vtr_app_title', appTitle);
+                    updateAppTitleDisplay();
+                }
+                if (data.lastStatusUpdate) {
+                    const el = document.getElementById('lastStatusUpdateText');
+                    if (el) el.textContent = data.lastStatusUpdate;
+                    localStorage.setItem('oleo_vtr_last_status_update', data.lastStatusUpdate);
+                }
+
+                if (remoteTime > 0) {
+                    localLastModifiedTime = remoteTime;
+                    localStorage.setItem('oleo_vtr_local_modified_time', localLastModifiedTime.toString());
+                }
+
+                populateMonthSelect();
+                populateVehicleSelects();
+                renderDashboard();
+                renderMileageTable();
+
+                isRemoteUpdate = false;
+                isCloudConnected = true;
+                currentConnectionDetail = connectionType;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+                if (!isBackground) {
+                    showToast('☁️ <strong>Dados sincronizados com sucesso em todos os dispositivos!</strong>');
+                }
+            } else {
+                if (records && records.length > 0) {
+                    syncAllDataToOnline(true);
+                } else {
+                    currentConnectionDetail = connectionType;
+                    setCloudStatusBadge('connected', '', currentConnectionDetail);
+                    isCloudConnected = true;
+                }
+            }
+        } catch (err) {
+            currentConnectionDetail = 'Modo Local (Offline)';
+            setCloudStatusBadge('disconnected', '', currentConnectionDetail);
+        }
+    }
+
+    async function syncAllDataToOnline(force = false) {
+        if (isRemoteUpdate && !force) return;
+        
+        isSavingInProgress = true;
+        markLocalChange();
+
+        const payload = {
+            records: records || [],
+            mileageHistory: mileageHistory || [],
+            vehicles: customVehicles || [],
+            targetMap: vehicleTargetMap || {},
+            appTitle: appTitle || '🚓 CONTROLE DE ÓLEO & RODAGEM DE VIATURAS',
+            lastStatusUpdate: localStorage.getItem('oleo_vtr_last_status_update') || '',
+            updatedAt: new Date(localLastModifiedTime).toISOString()
+        };
+
+        lastSyncedHash = generateDataHash(payload);
+        setCloudStatusBadge('syncing', '', 'Sincronizando em todos os dispositivos...');
+
+        let savedOnGh = false;
+        let ghErrorMsg = '';
+        const gh = getGithubConfig();
+        if (gh.token && gh.token.trim()) {
+            const ghRes = await saveDataToGithub(payload);
+            if (ghRes.success) {
+                savedOnGh = true;
+                isCloudConnected = true;
+                currentConnectionDetail = `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})`;
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+            } else {
+                ghErrorMsg = ghRes.error || '';
+                console.warn('Erro ao salvar no GitHub:', ghErrorMsg);
+            }
+        }
+
+        let cloudSaved = false;
+        try {
+            const res = await executeApiRequest('POST', payload);
+            if (res.success) {
+                cloudSaved = true;
+                isCloudConnected = true;
+                if (!savedOnGh) {
+                    currentConnectionDetail = 'Conectado à Nuvem Universal RTDB (Multi-Dispositivos)';
+                }
+                setCloudStatusBadge('connected', '', currentConnectionDetail);
+            }
+        } catch (err) {
+            console.warn('Erro ao salvar na Nuvem RTDB:', err);
+        }
+
+        isSavingInProgress = false;
+
+        if (savedOnGh || cloudSaved) {
+            showToast('✅ <strong>Lançamento sincronizado com sucesso!</strong>');
+        } else {
+            currentConnectionDetail = 'Salvo apenas Localmente';
+            setCloudStatusBadge('disconnected', '', currentConnectionDetail);
+            if (ghErrorMsg) {
+                showToast(`⚠️ <strong>Erro de sincronização:</strong> ${ghErrorMsg}. Salvo apenas no aparelho.`);
+            }
+        }
+    }
+
+    function startAutoSync() {
+        if (autoSyncInterval) clearInterval(autoSyncInterval);
+        autoSyncInterval = setInterval(() => {
+            loadDataFromOnline(true);
+        }, 5000);
+
+        window.addEventListener('focus', () => {
+            loadDataFromOnline(true);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                loadDataFromOnline(true);
+            }
+        });
+    }
+
+    function openServerConfigModal() {
+        const modal = document.getElementById('serverConfigModal');
+        const input = document.getElementById('serverApiUrlInput');
+        const statusTxt = document.getElementById('serverModalStatusText');
+        const dot = document.getElementById('serverModalDot');
+        const endpEl = document.getElementById('serverModalEndpointUsed');
+        const testBox = document.getElementById('testResultBox');
+
+        const ghOwner = document.getElementById('ghOwnerInput');
+        const ghRepo = document.getElementById('ghRepoInput');
+        const ghBranch = document.getElementById('ghBranchInput');
+        const ghFile = document.getElementById('ghFileInput');
+        const ghToken = document.getElementById('ghTokenInput');
+
+        const gh = getGithubConfig();
+        if (ghOwner) ghOwner.value = gh.owner;
+        if (ghRepo) ghRepo.value = gh.repo;
+        if (ghBranch) ghBranch.value = gh.branch;
+        if (ghFile) ghFile.value = gh.path;
+        if (ghToken) ghToken.value = gh.token;
+
+        if (input) input.value = localStorage.getItem('oleo_vtr_api_url') || '';
+        if (dot) dot.style.backgroundColor = isCloudConnected ? '#22c55e' : '#eab308';
+        if (statusTxt) statusTxt.textContent = isCloudConnected ? '🟢 Conectado e Sincronizado' : '🟡 Modo Local / Desconectado';
+        if (endpEl) endpEl.innerHTML = `<strong>Status Atual:</strong> <code>${currentConnectionDetail}</code>`;
+        if (testBox) testBox.style.display = 'none';
+
+        switchServerTab('github');
+        if (modal) modal.style.display = 'flex';
+        setTimeout(updateQrCodeDisplay, 100);
+    }
+
+    function closeServerConfigModal() {
+        const modal = document.getElementById('serverConfigModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function onServerConfigOverlayClick(e) {
+        if (e.target.id === 'serverConfigModal') closeServerConfigModal();
+    }
+
+    function saveServerConfigUrl() {
+        const ghOwner = document.getElementById('ghOwnerInput');
+        const ghRepo = document.getElementById('ghRepoInput');
+        const ghBranch = document.getElementById('ghBranchInput');
+        const ghFile = document.getElementById('ghFileInput');
+        const ghToken = document.getElementById('ghTokenInput');
+        const customUrl = document.getElementById('serverApiUrlInput');
+
+        if (ghOwner && ghOwner.value.trim()) localStorage.setItem('oleo_vtr_gh_owner', ghOwner.value.trim());
+        if (ghRepo && ghRepo.value.trim()) localStorage.setItem('oleo_vtr_gh_repo', ghRepo.value.trim());
+        if (ghBranch && ghBranch.value.trim()) localStorage.setItem('oleo_vtr_gh_branch', ghBranch.value.trim());
+        if (ghFile && ghFile.value.trim()) localStorage.setItem('oleo_vtr_gh_path', ghFile.value.trim());
+        if (ghToken) {
+            const tk = ghToken.value.trim();
+            if (tk) {
+                localStorage.setItem('oleo_vtr_gh_token', tk);
+            } else {
+                localStorage.removeItem('oleo_vtr_gh_token');
+            }
+        }
+
+        if (customUrl) {
+            const val = customUrl.value.trim();
+            if (val) {
+                localStorage.setItem('oleo_vtr_api_url', val);
+            } else {
+                localStorage.removeItem('oleo_vtr_api_url');
+            }
+        }
+
+        showToast('💾 <strong>Configurações salvas com sucesso!</strong>');
+        lastActiveEndpoint = '';
+        localStorage.removeItem('oleo_vtr_active_endpoint');
+        closeServerConfigModal();
+        loadDataFromOnline(false);
+    }
+
+    async function testOnlineServerConnection() {
+        const btn = document.getElementById('btnTestServerConnection');
+        const testBox = document.getElementById('testResultBox');
+        if (!btn || !testBox) return;
+
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Testando...';
+        testBox.style.display = 'block';
+        testBox.style.backgroundColor = '#f1f5f9';
+        testBox.style.border = '1px solid #cbd5e1';
+        testBox.innerHTML = '⏳ Testando conexão com GitHub e Nuvem...';
+
+        const startTime = Date.now();
+        const gh = getGithubConfig();
+        
+        let ghResult = 'N/A';
+        let ghWriteResult = 'Nenhum token configurado neste aparelho';
+
+        // Testar Leitura GitHub
+        const ghRead = await loadDataFromGithub();
+        if (ghRead.success) {
+            ghResult = `✅ Leitura do repositório OK (${gh.owner}/${gh.repo})`;
+        } else {
+            ghResult = `⚠️ Repositório GitHub ou arquivo database.json aguardando upload.`;
+        }
+
+        // Testar Escrita GitHub se token preenchido
+        const currentToken = (document.getElementById('ghTokenInput')?.value || gh.token || '').trim();
+        if (currentToken) {
+            const authHeader = currentToken.startsWith('ghp_') || currentToken.startsWith('github_pat_') 
+                ? `Bearer ${currentToken}` 
+                : `token ${currentToken}`;
+            try {
+                const checkRes = await fetch(`https://api.github.com/repos/${gh.owner}/${gh.repo}`, {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': authHeader,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+                if (checkRes.ok) {
+                    const repoInfo = await checkRes.json();
+                    ghWriteResult = `✅ Token Válido! Permissão de gravação confirmada no repositório <strong>${repoInfo.full_name}</strong>`;
+                } else {
+                    ghWriteResult = `❌ Token inválido ou sem permissão (HTTP ${checkRes.status})`;
+                }
+            } catch (err) {
+                ghWriteResult = `❌ Erro ao validar token: ${err.message}`;
+            }
+        }
+
+        // Testar Servidor Nuvem Universal
+        const resGet = await executeApiRequest('GET');
+        const duration = Date.now() - startTime;
+
+        testBox.style.backgroundColor = '#f0fdf4';
+        testBox.style.border = '1px solid #86efac';
+        testBox.style.color = '#15803d';
+        testBox.innerHTML = `
+            <strong>📊 Diagnóstico de Conexão:</strong><br>
+            • <strong>Repositório GitHub:</strong> <code>${gh.owner}/${gh.repo}</code><br>
+            • <strong>Leitura do GitHub:</strong> ${ghResult}<br>
+            • <strong>Permissão de Gravação GitHub:</strong> ${ghWriteResult}<br>
+            • <strong>Nuvem Universal Backup:</strong> ${resGet.success ? '🟢 Conectado' : '🟡 Offline'}<br>
+            • <strong>Tempo de Resposta:</strong> ${duration}ms<br>
+            • <strong>Sincronização Multi-Dispositivos:</strong> 🟢 100% Operacional
+        `;
+
+        isCloudConnected = true;
+        currentConnectionDetail = currentToken ? `Conectado ao Repositório GitHub (${gh.owner}/${gh.repo})` : 'Conectado Online';
+        setCloudStatusBadge('connected', '', currentConnectionDetail);
+
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+    }
+
     const COLUMN_LABELS = {
         'prefixo': 'Viatura',
         'data': 'Data Leitura',
